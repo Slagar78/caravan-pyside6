@@ -1,0 +1,607 @@
+<instruction_set>
+
+    <instruction opcode="0000000000111100">
+        <name>OR Immediate to CCR</name>
+        <repr>ORI CCR</repr>
+        <vars>opcode,subcode,data</vars>
+        <format>16,8,8</format>
+    </instruction>
+    
+    <instruction opcode="00000000">
+        <name>OR Immediate</name>
+        <repr>ORI.s</repr>
+        <vars>opcode,size,dest,data</vars>
+        <format>8,size,ea,data</format>
+    </instruction>
+
+    <instruction opcode="0000001000111100">
+        <name>AND Immediate to CCR</name>
+        <repr>ANDI CCR</repr>
+        <vars>opcode,subcode,data</vars>
+        <format>16,8,8</format>
+    </instruction>
+    
+    <instruction opcode="00000010">
+        <name>AND Immediate</name>
+        <repr>ANDI.s</repr>
+        <vars>opcode,size,dest,data</vars>
+        <format>8,size,ea,data</format>
+    </instruction>
+    
+    <instruction opcode="00000100">
+        <name>Subtract Immediate</name>
+        <repr>SUBI.s</repr>
+        <vars>opcode,size,dest,data</vars>
+        <format>8,size,ea,data</format>
+    </instruction>
+    
+    <!-- Skipped: RTM -->
+    <!-- Skipped: CALLM -->
+    
+    <instruction opcode="00000110">
+        <name>Add Immediate</name>
+        <repr>ADDI.s</repr>
+        <vars>opcode,size,dest,data</vars>
+        <format>8,size,ea,data</format>
+    </instruction>
+    
+    <!-- Skipped: CMP2 -->
+    <!-- Skipped: CHK2 -->
+
+    <instruction opcode="0000101000111100">
+        <name>XOR Immediate to CCR</name>
+        <repr>EORI CCR</repr>
+        <vars>opcode,subcode,data</vars>
+        <format>16,8,8</format>
+    </instruction>
+    
+    <instruction opcode="00001010">
+        <name>XOR Immediate</name>
+        <repr>EORI.s</repr>
+        <vars>opcode,size,dest,data</vars>
+        <format>8,size,ea,data</format>
+    </instruction>
+
+    <instruction opcode="00001100">
+        <name>Compare Immediate</name>
+        <repr>CMPI.s</repr>
+        <vars>opcode,size,dest,data</vars>
+        <format>8,size,ea,data</format>
+    </instruction>
+    
+    <instruction opcode="0000100000">
+        <name>Bit Test Immediate</name>
+        <repr>BTST</repr>
+        <vars>opcode,dest,,data</vars>
+        <format>10,ea,8,8</format>
+    </instruction>
+    
+    <instruction opcode="0000100001">
+        <name>Bit Change Immediate</name>
+        <repr>BCHG</repr>
+        <vars>opcode,dest,,data</vars>
+        <format>10,ea,8,8</format>
+    </instruction>
+
+    <instruction opcode="0000100010">
+        <name>Bit Clear Immediate</name>
+        <repr>BCLR</repr>
+        <vars>opcode,dest,,data</vars>
+        <format>10,ea,8,8</format>
+    </instruction>
+    
+    <instruction opcode="0000100011">
+        <name>Bit Set Immediate</name>
+        <repr>BSET</repr>
+        <vars>opcode,dest,,data</vars>
+        <format>10,ea,8,8</format>
+    </instruction>
+
+    <!-- Skipped: MOVES -->
+    <!-- Skipped: CAS2 -->
+    <!-- Skipped: CAS -->
+    
+    <instruction opcode="0000...100">
+        <name>Bit Test Dynamic</name>
+        <repr>BTST</repr>
+        <vars>opcode,src,subcode,dest</vars>
+        <format>4,reg,3,ea</format>
+    </instruction>
+    
+    <instruction opcode="0000...101">
+        <name>Bit Change Dynamic</name>
+        <repr>BCHG</repr>
+        <vars>opcode,src,subcode,dest</vars>
+        <format>4,reg,3,ea</format>
+    </instruction>
+
+    <instruction opcode="0000...110">
+        <name>Bit Clear Dynamic</name>
+        <repr>BCLR</repr>
+        <vars>opcode,src,subcode,dest</vars>
+        <format>4,reg,3,ea</format>
+    </instruction>
+    
+    <instruction opcode="0000...111">
+        <name>Bit Set Dynamic</name>
+        <repr>BSET</repr>
+        <vars>opcode,src,subcode,dest</vars>
+        <format>4,reg,3,ea</format>
+    </instruction>
+    
+    <!-- Skipped: MOVEP -->
+    <!-- Skipped: MOVEA -->
+    
+    <instruction opcode="01000000">
+        <name>Negate (Extend)</name>
+        <repr>NEGX.s</repr>
+        <vars>opcode,size,dest</vars>
+        <format>8,size,ea</format>
+    </instruction>
+    
+    <instruction opcode="01000010">
+        <name>Clear</name>
+        <repr>CLR.s</repr>
+        <vars>opcode,size,dest</vars>
+        <format>8,size,ea</format>
+    </instruction>
+
+    <instruction opcode="0100010011">
+        <name>Move to CCR</name>
+        <repr>MOVE CCR</repr>
+        <vars>opcode,size,src</vars>
+        <format>8,movesize,ea</format>
+    </instruction>
+    
+    <instruction opcode="01000100">
+        <name>Negate</name>
+        <repr>NEG.s</repr>
+        <vars>opcode,size,dest</vars>
+        <format>8,size,ea</format>
+    </instruction>
+    
+    <instruction opcode="0100011011">
+        <name>Move to SR</name>
+        <repr>MOVE SR</repr>
+        <vars>opcode,size,src</vars>
+        <format>8,movesize,ea</format>
+    </instruction>
+    
+    <instruction opcode="01000110">
+        <name>NOT</name>
+        <repr>NOT.s</repr>
+        <vars>opcode,size,dest</vars>
+        <format>8,size,ea</format>
+    </instruction>
+    
+    <instruction opcode="0100100001000">
+        <name>Swap</name>
+        <repr>SWAP</repr>
+        <vars>opcode,dest</vars>
+        <format>13,reg</format>
+    </instruction>
+    
+    <instruction opcode="0100100...000">
+        <name>Extend</name>
+        <repr>EXT.s</repr>
+        <vars>opcode,size,subcode,dest</vars>
+        <format>7,addrsize,3,reg</format>
+    </instruction>
+    
+    <!-- Skipped: LINK (long) -->
+    <!-- Skipped: NBCD -->
+
+    <!-- Skipped: BKPT -->
+    <!-- Skipped: PEA -->
+    <!-- Skipped: BGND -->
+    <!-- Skipped: ILLEGAL -->
+    <!-- Skipped: TAS -->
+    
+    <instruction opcode="01001010">
+        <name>Test</name>
+        <repr>TST.s</repr>
+        <vars>opcode,size,dest</vars>
+        <format>8,size,ea</format>
+    </instruction>
+    
+    <!-- Skipped: MULU (long) -->
+    <!-- Skipped: MULS (long) -->
+    <!-- Skipped: DIVU,DIVUL (long) -->
+    <!-- Skipped: DIVS,DIVSL (long) -->    
+    
+    <instruction opcode="010011100110">
+        <name>Move to USP</name>
+        <repr>MOVE USP</repr>
+        <vars>opcode,data</vars>
+        <format>12,nibble</format>
+    </instruction>
+    
+    <instruction opcode="010011100100">
+        <name>Exception</name>
+        <repr>TRAP</repr>
+        <vars>opcode,data</vars>
+        <format>12,trap</format>
+    </instruction>
+
+    <instruction opcode="0100111001010">
+        <name>Link (16)</name>
+        <repr>LINK.W</repr>
+        <vars>opcode,dest,data</vars>
+        <format>13,reg,16</format>
+    </instruction>
+
+    <instruction opcode="0100111001011">
+        <name>Unlink</name>
+        <repr>UNLK</repr>
+        <vars>opcode,dest</vars>
+        <format>13,reg</format>
+    </instruction>
+    
+    <!-- Skipped: MOVE USP -->
+    <!-- Skipped: RESET -->
+
+    <instruction opcode="0100111001110001">
+        <name>No Operation</name>
+        <repr>NOP</repr>
+        <vars>opcode</vars>
+        <format>16</format>
+    </instruction>
+    
+    <!-- Skipped: STOP -->
+    
+    <instruction opcode="0100111001110011">
+        <name>Return to Exception</name>
+        <repr>RTE</repr>
+        <vars>opcode</vars>
+        <format>16</format>
+    </instruction>
+
+    <!-- Skipped: RTD -->
+    
+    <instruction opcode="0100111001110101">
+        <name>Return to Subroutine</name>
+        <repr>RTS</repr>
+        <vars>opcode</vars>
+        <format>16</format>
+    </instruction>
+    
+    <instruction opcode="0100111001110111">
+        <name>Return and Restore</name>
+        <repr>RTR</repr>
+        <vars>opcode</vars>
+        <format>16</format>
+    </instruction>
+    
+    <!-- Skipped: TRAPV -->
+    <!-- Skipped: RTR -->
+    <!-- Skipped: MOVEC -->
+
+    <instruction opcode="0100111010">
+        <name>Jump to Subroutine</name>
+        <repr>JSR</repr>
+        <vars>opcode,dest</vars>
+        <format>10,ea</format>
+    </instruction>
+    
+    <instruction opcode="0100111011">
+        <name>Jump</name>
+        <repr>JMP</repr>
+        <vars>opcode,dest</vars>
+        <format>10,ea</format>
+    </instruction>
+
+    <instruction opcode="01001.001">
+        <name>Move Multiple</name>
+        <repr>MOVEM.s</repr>
+        <vars>opcode,dir,subcode,size,dest,src</vars>
+        <format>5,bool,3,bsize,ea,16</format>
+    </instruction>
+
+    <instruction opcode="0100...111">
+        <name>Load Effective Address</name>
+        <repr>LEA</repr>
+        <vars>opcode,dest,subcode,src</vars>
+        <format>4,areg,3,ea</format>
+    </instruction>
+    
+    <!-- Skipped: CHK -->
+    
+    <instruction opcode="0101....11001">
+        <name>Test, Decrement, Branch</name>
+        <repr>DBc</repr>
+        <vars>opcode,cond,subcode,src,dest</vars>
+        <format>4,cond,5,reg,ofs</format>
+    </instruction>
+    
+    <instruction opcode="0101...0">
+        <name>Add Quick</name>
+        <repr>ADDQ.s</repr>
+        <vars>opcode,src,subcode,size,dest</vars>
+        <format>4,3,1,size,ea</format>
+    </instruction>
+    
+    <instruction opcode="0101...1">
+        <name>Subtract Quick</name>
+        <repr>SUBQ.s</repr>
+        <vars>opcode,src,subcode,size,dest</vars>
+        <format>4,3,1,size,ea</format>
+    </instruction>
+    
+    <!-- Skipped: TRAPcc -->
+    <!-- Skipped: Scc -->
+    
+    <instruction opcode="01100000">
+        <name>Branch Always</name>
+        <repr>BRA</repr>
+        <vars>opcode,dest</vars>
+        <format>8,bvar</format>
+    </instruction>
+    
+    <instruction opcode="01100001">
+        <name>Branch to Subroutine</name>
+        <repr>BSR</repr>
+        <vars>opcode,dest</vars>
+        <format>8,bvar</format>
+    </instruction>
+    
+    <instruction opcode="0110">
+        <name>Branch on Condition</name>
+        <repr>Bc</repr>
+        <vars>opcode,cond,dest</vars>
+        <format>4,cond,bvar</format>
+    </instruction>
+
+    <instruction opcode="0111...0">
+        <name>Move Quick</name>
+        <repr>MOVEQ</repr>
+        <vars>opcode,dest,cond,src</vars>
+        <format>4,reg,1,8</format>
+    </instruction>
+
+    <instruction opcode="1000...011">
+        <name>Divide Unsigned (16)</name>
+        <repr>DIVU.W</repr>
+        <vars>opcode,dest,subcode,size,src</vars>
+        <format>4,reg,1,movesize,ea</format>
+    </instruction>
+    
+    <!-- Skipped: SBCD -->
+    <!-- Skipped: PACK -->
+    <!-- Skipped: UNPK -->
+
+    <instruction opcode="1000...111">
+        <name>Divide Signed (16)</name>
+        <repr>DIVS.W</repr>
+        <vars>opcode,dest,subcode,size,src</vars>
+        <format>4,reg,1,movesize,ea</format>
+    </instruction>
+    
+    <instruction opcode="1000">
+        <name>OR</name>
+        <repr>OR.s</repr>
+        <vars>opcode,dest,size,src</vars>
+        <format>4,reg,xsize,ea</format>
+    </instruction>
+    
+    <instruction opcode="1001....11">
+        <name>Subtract Address</name>
+        <repr>SUBA.s</repr>
+        <vars>opcode,dest,size,src</vars>
+        <format>4,reg,addrsize,ea</format>
+    </instruction>
+    
+    <instruction opcode="1001...1">
+        <name>Subtract Extend</name>
+        <repr>SUBX.s</repr>
+        <vars>opcode,dest,subcode,size,src</vars>
+        <format>4,reg,1,size,ea</format>
+    </instruction>
+    
+    <instruction opcode="1001">
+        <name>Subtract</name>
+        <repr>SUB.s</repr>
+        <vars>opcode,dest,size,src</vars>
+        <format>4,reg,xsize,ea</format>
+    </instruction>
+
+    <instruction opcode="1011....11">
+        <name>Compare Address</name>
+        <repr>CMPA.s</repr>
+        <vars>opcode,dest,subcode,size,src</vars>
+        <format>4,reg,1,addrsize,ea</format>
+    </instruction>
+    
+    <instruction opcode="1011...1..001">
+        <name>Compare Memory</name>
+        <repr>CMPM.s</repr>
+        <vars>opcode,dest,subcode,size,subcode2,src</vars>
+        <format>4,reg,1,size,3,reg</format>
+    </instruction>
+    
+    <instruction opcode="1011...0">
+        <name>Compare</name>
+        <repr>CMP.s</repr>
+        <vars>opcode,dest,subcode,size,src</vars>
+        <format>4,reg,1,size,ea</format>
+    </instruction>
+    
+    <instruction opcode="1011...1">
+        <name>XOR</name>
+        <repr>EOR.s</repr>
+        <vars>opcode,src,subcode,size,dest</vars>
+        <format>4,reg,1,size,ea</format>
+    </instruction>
+    
+    <instruction opcode="1100...011">
+        <name>Multiply Unsigned (16)</name>
+        <repr>MULU.W</repr>
+        <vars>opcode,dest,subcode,size,src</vars>
+        <format>4,reg,1,movesize,ea</format>
+    </instruction>
+    
+    <!-- Skipped: ABCD -->
+
+    <instruction opcode="1100...111">
+        <name>Multiply Signed (16)</name>
+        <repr>MULS.W</repr>
+        <vars>opcode,dest,subcode,size,src</vars>
+        <format>4,reg,1,movesize,ea</format>
+    </instruction>
+    
+    <instruction opcode="1100...1..00">
+        <name>Exchange</name>
+        <repr>EXG</repr>
+        <vars>opcode,dest,subcode,mode,src</vars>
+        <format>4,reg,1,5,reg</format>
+    </instruction>
+    
+    <instruction opcode="1100">
+        <name>AND</name>
+        <repr>AND.s</repr>
+        <vars>opcode,dest,size,src</vars>
+        <format>4,reg,xsize,ea</format>
+    </instruction>
+
+    <instruction opcode="1101....11">
+        <name>Add Address</name>
+        <repr>ADDA.s</repr>
+        <vars>opcode,dest,size,src</vars>
+        <format>4,reg,addrsize,ea</format>
+    </instruction>
+    
+    <instruction opcode="1101...1">
+        <name>Add Extend</name>
+        <repr>ADDX.s</repr>
+        <vars>opcode,dest,subcode,size,src</vars>
+        <format>4,reg,1,size,ea</format>
+    </instruction>
+    
+    <instruction opcode="1101">
+        <name>Add</name>
+        <repr>ADD.s</repr>
+        <vars>opcode,dest,size,src</vars>
+        <format>4,reg,xsize,ea</format>
+    </instruction>
+
+    <instruction opcode="1110000111">
+        <name>Arithmetic Shift Left - Memory</name>
+        <repr>ASL.s</repr>
+        <vars>opcode,src,subcode,size,dest</vars>
+        <format>4,reg,1,size,ea</format>
+    </instruction>
+
+    <instruction opcode="1110...1..000">
+        <name>Arithmetic Shift Left - Register</name>
+        <repr>ASL.s</repr>
+        <vars>opcode,src,subcode,size,dest</vars>
+        <format>4,reg,1,size,ea</format>
+    </instruction>
+    
+    <instruction opcode="1110000011">
+        <name>Arithmetic Shift Right - Memory</name>
+        <repr>ASR.s</repr>
+        <vars>opcode,src,subcode,size,dest</vars>
+        <format>4,reg,1,size,ea</format>
+    </instruction>
+
+    <instruction opcode="1110...0..000">
+        <name>Arithmetic Shift Right - Register</name>
+        <repr>ASR.s</repr>
+        <vars>opcode,src,subcode,size,dest</vars>
+        <format>4,reg,1,size,ea</format>
+    </instruction>
+    
+    <instruction opcode="1110001111">
+        <name>Logical Shift Left - Memory</name>
+        <repr>LSL.s</repr>
+        <vars>opcode,src,subcode,size,dest</vars>
+        <format>4,reg,1,size,ea</format>
+    </instruction>
+
+    <instruction opcode="1110...1...01">
+        <name>Logical Shift Left - Register</name>
+        <repr>LSL.s</repr>
+        <vars>opcode,src,subcode,size,subcode2,dest</vars>
+        <format>4,reg,1,size,3,reg</format>
+    </instruction>
+    
+    <instruction opcode="1110001011">
+        <name>Logical Shift Right - Memory</name>
+        <repr>LSR.s</repr>
+        <vars>opcode,src,subcode,size,dest</vars>
+        <format>4,reg,1,size,ea</format>
+    </instruction>
+
+    <instruction opcode="1110...0...01">
+        <name>Logical Shift Right - Register</name>
+        <repr>LSR.s</repr>
+        <vars>opcode,src,subcode,size,subcode2,dest</vars>
+        <format>4,reg,1,size,3,reg</format>
+    </instruction>
+
+    <instruction opcode="1110010111">
+        <name>Rotate Extend Left - Memory</name>
+        <repr>ROXL.s</repr>
+        <vars>opcode,src,subcode,size,dest</vars>
+        <format>4,reg,1,size,ea</format>
+    </instruction>
+
+    <instruction opcode="1110...1..010">
+        <name>Rotate Extend Left - Register</name>
+        <repr>ROXL.s</repr>
+        <vars>opcode,src,subcode,size,subcode2,dest</vars>
+        <format>4,reg,1,size,3,reg</format>
+    </instruction>
+    
+    <instruction opcode="1110010011">
+        <name>Rotate Extend Right - Memory</name>
+        <repr>ROXR.s</repr>
+        <vars>opcode,src,subcode,size,dest</vars>
+        <format>4,reg,1,size,ea</format>
+    </instruction>
+
+    <instruction opcode="1110...0..010">
+        <name>Rotate Extend Right - Register</name>
+        <repr>ROXR.s</repr>
+        <vars>opcode,src,subcode,size,subcode2,dest</vars>
+        <format>4,reg,1,size,3,reg</format>
+    </instruction>
+
+    <instruction opcode="1110011111">
+        <name>Rotate Left - Memory</name>
+        <repr>ROL.s</repr>
+        <vars>opcode,src,subcode,size,dest</vars>
+        <format>4,reg,1,size,ea</format>
+    </instruction>
+
+    <instruction opcode="1110...1...11">
+        <name>Rotate Left - Register</name>
+        <repr>ROL.s</repr>
+        <vars>opcode,src,subcode,size,subcode2,dest</vars>
+        <format>4,reg,1,size,3,reg</format>
+    </instruction>
+    
+    <instruction opcode="1110011011">
+        <name>Rotate Right - Memory</name>
+        <repr>ROR.s</repr>
+        <vars>opcode,src,subcode,size,dest</vars>
+        <format>4,reg,1,size,ea</format>
+    </instruction>
+
+    <instruction opcode="1110...0...11">
+        <name>Rotate Right - Register</name>
+        <repr>ROR.s</repr>
+        <vars>opcode,src,subcode,size,subcode2,dest</vars>
+        <format>4,reg,1,size,3,reg</format>
+    </instruction>
+    
+    <!-- generic -->
+    
+    <instruction opcode="00">
+        <name>Move</name>
+        <repr>MOVE.s</repr>
+        <vars>opcode,size,dest,src</vars>
+        <format>2,movesize,bea,ea</format>
+    </instruction>
+    
+</instruction_set>
