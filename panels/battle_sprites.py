@@ -1,9 +1,8 @@
-import math
-import binascii
+import math, binascii
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel,
+    QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QGroupBox, QLabel,
     QPushButton, QComboBox, QSpinBox, QRadioButton, QCheckBox,
-    QListWidget, QFileDialog, QMessageBox
+    QListWidget, QFileDialog, QMessageBox, QDialog, QScrollArea, QFrame
 )
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QPixmap, QImage, QColor
@@ -15,8 +14,8 @@ import shiboken6
 h2i = lambda i: int(i, 16)
 
 class BattleSpritePanel(rompanel.ROMPanel):
-
     frameTitle = "Battle Sprite Editor"
+    canMaximize = True          # ← теперь окно можно растягивать
 
     def init(self):
         self.palette = self.rom.getDataByName("palettes", "Sprite & UI Palette")
@@ -28,138 +27,202 @@ class BattleSpritePanel(rompanel.ROMPanel):
         self.animFrames = []
         self.curFrameIdx = 0
         self.curPaletteIdx = 0
+        self.current_scale = 3
 
-        # ---------- Properties (Unimplemented) ----------
-        sbs2 = QVBoxLayout()
-        sbs2_widget = QWidget()
-        sbs2_widget.setLayout(sbs2)                              # <-- исправлено
-        sbs2_widget.setStyleSheet("border: 1px solid black;")
+        # ==================== SELECT SPRITE ====================
+        sbs1 = QGroupBox("Select Battle Sprite")
+        sbs1_layout = QVBoxLayout(sbs1)
+        self.battleSpriteList = QComboBox()
+        self.battleSpriteList.addItems([bs.name for bs in self.rom.data["battle_sprites"]])
+        self.battleSpriteList.setCurrentIndex(0)
+        sbs1_layout.addWidget(self.battleSpriteList)
+
+        # ==================== PROPERTIES (UNIMPLEMENTED) ====================
+        sbs2 = QGroupBox("Properties (UNIMPLEMENTED)")
+        sbs2_layout = QVBoxLayout(sbs2)
+        sbs2_layout.setAlignment(Qt.AlignCenter)
 
         animSpdText = QLabel("Anim Speed")
-        self.animSpdCtrl = QSpinBox(); self.animSpdCtrl.setRange(0, 65535)
+        self.animSpdCtrl = QSpinBox(); self.animSpdCtrl.setRange(0, 65535); self.animSpdCtrl.setFixedSize(65, 20)
         mystText = QLabel("???")
-        self.mystCtrl = QSpinBox(); self.mystCtrl.setRange(0, 65535)
+        self.mystCtrl = QSpinBox(); self.mystCtrl.setRange(0, 65535); self.mystCtrl.setFixedSize(65, 20)
         spellFrameText = QLabel("Spell Use Frame")
-        self.spellFrameCtrl = QSpinBox(); self.spellFrameCtrl.setRange(0, 255)
+        self.spellFrameCtrl = QSpinBox(); self.spellFrameCtrl.setRange(0, 255); self.spellFrameCtrl.setFixedSize(65, 20)
         spellAnimText = QLabel("Spell Anim on Attack")
-        self.spellAnimCtrl = QSpinBox(); self.spellAnimCtrl.setRange(0, 255)
+        self.spellAnimCtrl = QSpinBox(); self.spellAnimCtrl.setRange(0, 255); self.spellAnimCtrl.setFixedSize(65, 20)
         self.spellWaitCheck = QCheckBox(" Wait for spell anim")
 
-        sbs2.addWidget(animSpdText, 0, Qt.AlignCenter)
-        sbs2.addWidget(self.animSpdCtrl, 0, Qt.AlignCenter)
-        sbs2.addWidget(mystText, 0, Qt.AlignCenter)
-        sbs2.addWidget(self.mystCtrl, 0, Qt.AlignCenter)
-        sbs2.addWidget(spellFrameText, 0, Qt.AlignCenter)
-        sbs2.addWidget(self.spellFrameCtrl, 0, Qt.AlignCenter)
-        sbs2.addWidget(spellAnimText, 0, Qt.AlignCenter)
-        sbs2.addWidget(self.spellAnimCtrl, 0, Qt.AlignCenter)
-        sbs2.addWidget(self.spellWaitCheck, 0, Qt.AlignCenter)
+        sbs2_layout.addWidget(animSpdText, alignment=Qt.AlignCenter)
+        sbs2_layout.addWidget(self.animSpdCtrl, alignment=Qt.AlignCenter)
+        sbs2_layout.addWidget(mystText, alignment=Qt.AlignCenter)
+        sbs2_layout.addWidget(self.mystCtrl, alignment=Qt.AlignCenter)
+        sbs2_layout.addWidget(spellFrameText, alignment=Qt.AlignCenter)
+        sbs2_layout.addWidget(self.spellFrameCtrl, alignment=Qt.AlignCenter)
+        sbs2_layout.addWidget(spellAnimText, alignment=Qt.AlignCenter)
+        sbs2_layout.addWidget(self.spellAnimCtrl, alignment=Qt.AlignCenter)
+        sbs2_layout.addWidget(self.spellWaitCheck, alignment=Qt.AlignCenter)
 
-        # ---------- Palette and Frame ----------
-        sbs3 = QVBoxLayout()
-        sbs3_widget = QWidget()
-        sbs3_widget.setLayout(sbs3)                              # <-- исправлено
-        sbs3_widget.setStyleSheet("border: 1px solid black;")
+        # ==================== PALETTE AND FRAME ====================
+        sbs3 = QGroupBox("Palette and Frame")
+        sbs3_layout = QVBoxLayout(sbs3)
 
         self.frameList = QComboBox()
         self.frameList.setFixedWidth(100)
         self.paletteList = QComboBox()
         self.paletteList.setFixedWidth(100)
-        sbs3.addWidget(self.frameList, 0, Qt.AlignLeft)
-        sbs3.addWidget(self.paletteList, 0, Qt.AlignLeft)
 
-        # ---------- Edit ----------
-        sbs4 = QVBoxLayout()
-        sbs4_widget = QWidget()
-        sbs4_widget.setLayout(sbs4)                              # <-- исправлено
-        sbs4_widget.setStyleSheet("border: 1px solid black;")
+        sbs3_layout.addWidget(self.frameList)
+        sbs3_layout.addWidget(self.paletteList)
+
+        # ==================== EDIT ====================
+        sbs4 = QGroupBox("Edit")
+        sbs4_layout = QHBoxLayout(sbs4)
 
         text1 = QLabel("Colors")
         text2 = QLabel("Sprite (Color 0 = trans)")
-        self.editPanel = rompanel.SpritePanel(self, None, 128, 96, self.palette, scale=3, bg=16)
+
+        self.editPanel = rompanel.SpritePanel(self, None, 128, 96, self.palette, scale=self.current_scale, bg=16, func="edit")
+
         self.colorPanels = []
         for p in range(16):
             self.colorPanels.append(rompanel.ColorPanel2(self, None, "#000000", num=p))
+
         self.changeColors()
+
         self.importButton = QPushButton("Import")
-        self.importButton.setFixedSize(40, 20)
+        self.importButton.setFixedSize(60, 22)
         self.exportButton = QPushButton("Export")
-        self.exportButton.setFixedSize(40, 20)
+        self.exportButton.setFixedSize(60, 22)
+
+        self.selectedColorLeft = QLabel()
+        self.selectedColorLeft.setFixedSize(32, 32)
+        self.selectedColorLeft.setStyleSheet("border: 2px solid #555; border-radius: 4px; background-color: #000;")
+        self.selectedColorLeft.color = 0
+
+        self.selectedColorRight = QLabel()
+        self.selectedColorRight.setFixedSize(32, 32)
+        self.selectedColorRight.setStyleSheet("border: 2px solid #555; border-radius: 4px; background-color: #000;")
+        self.selectedColorRight.color = 0
 
         sbs4left = QVBoxLayout()
-        colorSizer = QGridLayout()
-        for i, cp in enumerate(self.colorPanels):
-            colorSizer.addWidget(cp, i // 2, i % 2)
-        sbs4left.addWidget(text1, 0, Qt.AlignCenter)
+        sbs4left.setContentsMargins(4, 4, 4, 4)
+        sbs4left.setSpacing(6)
+
+        # ---------- Палитра (современный вид) ----------
+        leftCol = QVBoxLayout()
+        leftCol.setSpacing(3)
+        for i in range(0, 8):
+            leftCol.addWidget(self.colorPanels[i], alignment=Qt.AlignCenter)
+
+        rightCol = QVBoxLayout()
+        rightCol.setSpacing(3)
+        for i in range(8, 16):
+            rightCol.addWidget(self.colorPanels[i], alignment=Qt.AlignCenter)
+
+        colorSizer = QHBoxLayout()
+        colorSizer.addLayout(leftCol)
+        colorSizer.addSpacing(10)
+        colorSizer.addLayout(rightCol)
+        colorSizer.addSpacing(6)
+
+        # Индикаторы L и R вертикально справа от палитры
+        indicators_col = QVBoxLayout()
+        indicators_col.setSpacing(4)
+        left_lbl = QLabel("L"); left_lbl.setAlignment(Qt.AlignCenter)
+        indicators_col.addWidget(left_lbl)
+        indicators_col.addWidget(self.selectedColorLeft)
+        right_lbl = QLabel("R"); right_lbl.setAlignment(Qt.AlignCenter)
+        indicators_col.addWidget(right_lbl)
+        indicators_col.addWidget(self.selectedColorRight)
+
+        colorSizer.addLayout(indicators_col)
+        colorSizer.addStretch(1)
+
+        self.zoomLabel = QLabel("Zoom")
+        self.zoomRadios = {}
+        zoomSizer = QHBoxLayout()
+        for scale_val in [3, 5, 7, 8]:
+            rb = QRadioButton(f"{scale_val}x")
+            if scale_val == self.current_scale:
+                rb.setChecked(True)
+            self.zoomRadios[scale_val] = rb
+            zoomSizer.addWidget(rb)
+            rb.toggled.connect(lambda checked, s=scale_val: self.changeZoom(s))
+
+        sbs4left.addWidget(text1, alignment=Qt.AlignCenter)
         sbs4left.addLayout(colorSizer)
-        sbs4left.addWidget(self.importButton, 0, Qt.AlignCenter)
-        sbs4left.addWidget(self.exportButton, 0, Qt.AlignCenter)
+        
+        sbs4left.addWidget(self.importButton, alignment=Qt.AlignCenter)
+        sbs4left.addWidget(self.exportButton, alignment=Qt.AlignCenter)
+        sbs4left.addSpacing(4)
+        sbs4left.addWidget(self.zoomLabel, alignment=Qt.AlignCenter)
+        sbs4left.addLayout(zoomSizer)
 
         sbs4mid = QVBoxLayout()
-        sbs4mid.addWidget(text2, 0, Qt.AlignCenter)
-        sbs4mid.addWidget(self.editPanel, 0, Qt.AlignCenter)
+        sbs4mid.addWidget(text2, alignment=Qt.AlignCenter)
 
-        sbs4right = QVBoxLayout()
+        self.scrollArea = QScrollArea()
+        self.scrollArea.setWidgetResizable(False)
+        self.scrollArea.setWidget(self.editPanel)
+        self.scrollArea.setAlignment(Qt.AlignCenter)
+        sbs4mid.addWidget(self.scrollArea, alignment=Qt.AlignCenter)
 
-        sbs4.addLayout(sbs4left, 0)
-        sbs4.addLayout(sbs4mid, 1)
+        sbs4_layout.addLayout(sbs4left, 0)
+        sbs4_layout.addLayout(sbs4mid, 1)
 
-        # ---------- Animation Preview ----------
-        sbs5 = QHBoxLayout()
-        sbs5_widget = QWidget()
-        sbs5_widget.setLayout(sbs5)                              # <-- исправлено
-        sbs5_widget.setStyleSheet("border: 1px solid black;")
+        # ==================== EDIT/PREVIEW ANIMATION ====================
+        sbs5 = QGroupBox("Edit/Preview Animation (UNIMPLEMENTED)")
+        sbs5_layout = QHBoxLayout(sbs5)
 
         sbs5left = QVBoxLayout()
         self.animList = QComboBox()
         self.animList.addItems(["Idle", "Attack", "Defend"])
-        self.animList.setCurrentIndex(0)
+        self.animList.setCurrentIndex(0); self.animList.setFixedWidth(100)
+
         self.animPanel = rompanel.SpritePanel(self, None, 128, 96, self.palette, scale=1, bg=None, edit=False)
         self.animDelays = [250, 150, 50, 50, 50, 50]
-        self.animFrameIdx = 0
-        self.animCur = 0
+        self.animFrameIdx = 0; self.animCur = 0
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.TimerTest)
         self.changeAnim(0)
-        sbs5left.addWidget(self.animPanel, 0, Qt.AlignCenter)
-        sbs5left.addWidget(self.animList, 0, Qt.AlignCenter)
+
+        sbs5left.addWidget(self.animPanel, alignment=Qt.AlignCenter)
+        sbs5left.addWidget(self.animList, alignment=Qt.AlignCenter)
 
         sbs5mid = QVBoxLayout()
-        self.animFrameList = QListWidget()
-        self.animFrameList.setFixedSize(120, 100)
-        self.animAddButton = QPushButton("Add")
-        self.animAddButton.setFixedSize(40, 20)
-        self.animCopyButton = QPushButton("Copy")
-        self.animCopyButton.setFixedSize(40, 20)
-        self.animDelButton = QPushButton("Del")
-        self.animDelButton.setFixedSize(40, 20)
+        self.animFrameListBox = QListWidget(); self.animFrameListBox.setFixedSize(120, 100)
+        self.animAddButton = QPushButton("Add"); self.animAddButton.setFixedSize(40, 20)
+        self.animCopyButton = QPushButton("Copy"); self.animCopyButton.setFixedSize(40, 20)
+        self.animDelButton = QPushButton("Del"); self.animDelButton.setFixedSize(40, 20)
+
         sbs5midButtonSizer = QHBoxLayout()
         sbs5midButtonSizer.addWidget(self.animAddButton)
         sbs5midButtonSizer.addWidget(self.animCopyButton)
         sbs5midButtonSizer.addWidget(self.animDelButton)
-        sbs5mid.addWidget(self.animFrameList)
+
+        sbs5mid.addWidget(self.animFrameListBox)
         sbs5mid.addLayout(sbs5midButtonSizer)
 
         sbs5right = QGridLayout()
-        animPropsText1 = QLabel("Frame")
-        animPropsText2 = QLabel("Duration")
-        animPropsText3 = QLabel("Char X")
-        animPropsText4 = QLabel("Char Y")
-        animPropsText5 = QLabel("Weapon X")
-        animPropsText6 = QLabel("Weapon Y")
+        animPropsText1 = QLabel("Frame"); animPropsText2 = QLabel("Duration")
+        animPropsText3 = QLabel("Char X"); animPropsText4 = QLabel("Char Y")
+        animPropsText5 = QLabel("Weapon X"); animPropsText6 = QLabel("Weapon Y")
+
         self.animZCheck = QCheckBox(" Weapon in front of character")
-        self.animFrameCombo = QComboBox()
-        self.animDurCtrl = QSpinBox(); self.animDurCtrl.setRange(0, 255)
-        self.animCharXCtrl = QSpinBox(); self.animCharXCtrl.setRange(0, 255)
-        self.animCharYCtrl = QSpinBox(); self.animCharYCtrl.setRange(0, 255)
-        self.animWeaponXCtrl = QSpinBox(); self.animWeaponXCtrl.setRange(0, 255)
-        self.animWeaponYCtrl = QSpinBox(); self.animWeaponYCtrl.setRange(0, 255)
-        sbs5right.addWidget(animPropsText1, 0, 0)
-        sbs5right.addWidget(animPropsText2, 1, 0)
-        sbs5right.addWidget(animPropsText3, 2, 0)
-        sbs5right.addWidget(animPropsText4, 3, 0)
-        sbs5right.addWidget(animPropsText5, 4, 0)
-        sbs5right.addWidget(animPropsText6, 5, 0)
+        self.animFrameCombo = QComboBox(); self.animFrameCombo.setFixedWidth(100)
+        self.animDurCtrl = QSpinBox(); self.animDurCtrl.setRange(0, 255); self.animDurCtrl.setFixedSize(65, 20)
+        self.animCharXCtrl = QSpinBox(); self.animCharXCtrl.setRange(0, 255); self.animCharXCtrl.setFixedSize(65, 20)
+        self.animCharYCtrl = QSpinBox(); self.animCharYCtrl.setRange(0, 255); self.animCharYCtrl.setFixedSize(65, 20)
+        self.animWeaponXCtrl = QSpinBox(); self.animWeaponXCtrl.setRange(0, 255); self.animWeaponXCtrl.setFixedSize(65, 20)
+        self.animWeaponYCtrl = QSpinBox(); self.animWeaponYCtrl.setRange(0, 255); self.animWeaponYCtrl.setFixedSize(65, 20)
+
+        sbs5right.addWidget(animPropsText1, 0, 0, Qt.AlignRight)
+        sbs5right.addWidget(animPropsText2, 1, 0, Qt.AlignRight)
+        sbs5right.addWidget(animPropsText3, 2, 0, Qt.AlignRight)
+        sbs5right.addWidget(animPropsText4, 3, 0, Qt.AlignRight)
+        sbs5right.addWidget(animPropsText5, 4, 0, Qt.AlignRight)
+        sbs5right.addWidget(animPropsText6, 5, 0, Qt.AlignRight)
+
         sbs5right.addWidget(self.animFrameCombo, 0, 1)
         sbs5right.addWidget(self.animDurCtrl, 1, 1)
         sbs5right.addWidget(self.animCharXCtrl, 2, 1)
@@ -169,71 +232,78 @@ class BattleSpritePanel(rompanel.ROMPanel):
         sbs5right.addWidget(self.animZCheck, 6, 0, 1, 2)
 
         sbs5wf = QVBoxLayout()
-        animWeaponAnglePanel = QWidget()
-        angleLayout = QGridLayout(animWeaponAnglePanel)
+        animWSprText = QLabel("Weapon Direction"); animWSprText.setAlignment(Qt.AlignCenter)
+
+        self.weaponAnglePanel = QWidget(); self.weaponAnglePanel.setFixedSize(100, 100)
         self.animWeaponAngleRadios = {}
-        radius = 40
+        radius = 40; center = radius + 2
         first = True
         for a in range(0, 360, 30):
-            rx = int(math.cos(math.radians(a)) * radius + radius)
-            ry = int(-math.sin(math.radians(a)) * radius + radius)
-            rb = QRadioButton(animWeaponAnglePanel)
+            rx = int(math.cos(math.radians(a)) * radius + center)
+            ry = int(-math.sin(math.radians(a)) * radius + center)
+            rb = QRadioButton(self.weaponAnglePanel)
+            rb.move(rx, ry); rb.setFixedSize(16, 16)
             self.animWeaponAngleRadios[a] = rb
-            angleLayout.addWidget(rb, ry // 20, rx // 20)
-            if first:
-                rb.setChecked(True)
-                first = False
-        animWSprText = QLabel("Weapon Direction")
-        sbs5wf.addWidget(animWSprText, 0, Qt.AlignCenter)
-        sbs5wf.addWidget(animWeaponAnglePanel, 0, Qt.AlignCenter)
+            if first: rb.setChecked(True); first = False
 
-        sbs5.addLayout(sbs5left)
-        sbs5.addSpacing(10)
-        sbs5.addLayout(sbs5mid)
-        sbs5.addSpacing(10)
-        sbs5.addLayout(sbs5right)
-        sbs5.addSpacing(10)
-        sbs5.addLayout(sbs5wf)
+        sbs5wf.addWidget(animWSprText, alignment=Qt.AlignCenter)
+        sbs5wf.addWidget(self.weaponAnglePanel, alignment=Qt.AlignCenter)
 
-        # ---------- Main Layout ----------
-        midSizer = QHBoxLayout()
+        sbs5_layout.addLayout(sbs5left)
+        sbs5_layout.addSpacing(10)
+        sbs5_layout.addLayout(sbs5mid)
+        sbs5_layout.addSpacing(10)
+        sbs5_layout.addLayout(sbs5right, 1)
+        sbs5_layout.addSpacing(10)
+        sbs5_layout.addLayout(sbs5wf, 1)
+
+        # ==================== MAIN LAYOUT ====================
+        midWidget = QWidget()
+        midSizer = QHBoxLayout(midWidget)
         midRightSizer = QVBoxLayout()
 
-        midSizer.addLayout(sbs4)
-        midRightSizer.addLayout(sbs3)
-        midRightSizer.addStretch()
-        midRightSizer.addLayout(sbs2)
-        midSizer.addLayout(midRightSizer)
+        midSizer.addWidget(sbs4, 0)
+        midRightSizer.addWidget(sbs3, 0)
+        midRightSizer.addStretch(1)
+        midRightSizer.addWidget(sbs2, 0)
+        midSizer.addLayout(midRightSizer, 1)
 
-        self.sizer.addLayout(midSizer, 0, 0)
-        self.sizer.addLayout(sbs5, 1, 0)
+        self.sizer.addWidget(sbs1, 0, 0, 1, 2)
+        self.sizer.addWidget(midWidget, 1, 0)
+        self.sizer.addWidget(sbs5, 2, 0)
 
-        self.changeBattleSprite(0)
-
+        # Signals
+        self.battleSpriteList.currentIndexChanged.connect(self.OnSelectBattleSprite)
         self.paletteList.currentIndexChanged.connect(self.OnSelectPalette)
         self.frameList.currentIndexChanged.connect(self.OnSelectFrame)
         self.importButton.clicked.connect(self.OnImportImage)
         self.exportButton.clicked.connect(self.OnExportImage)
         self.timer.timeout.connect(self.TimerTest)
-        self.printed = False
 
-    # ====== Методы ======
-    def printrb(self):
-        rb = self.curFrame.raw_bytes.split("\n")
-        hx = self.curFrame.hexlify().split("\n")
-        for i in range(max(len(rb), len(hx))):
-            line1 = rb[i] if i < len(rb) else "No line"
-            line2 = hx[i] if i < len(hx) else "No line"
-            if line1 and line2:
-                print(["Different!!!","Same"][line1==line2])
-            print(line1)
-            print(line2)
-            print()
+        self.changeBattleSprite(0)
+
+    # ---------- Methods ----------
+    def changeEditColor(self, button, num):
+        if button == 0:
+            self.color_left = num
+            self.selectedColorLeft.color = num
+            self.selectedColorLeft.setStyleSheet(
+                f"border: 2px solid #555; border-radius: 4px; background-color: {self.palette.colors[num]};"
+            )
+        else:
+            self.color_right = num
+            self.selectedColorRight.color = num
+            self.selectedColorRight.setStyleSheet(
+                f"border: 2px solid #555; border-radius: 4px; background-color: {self.palette.colors[num]};"
+            )
+
+    def OnSelectBattleSprite(self, idx):
+        self.changeBattleSprite(idx)
 
     def OnImportImage(self):
-        if not shiboken6.isValid(self.editPanel):
+        if not shiboken6.isValid(self.editPanel) or self.editPanel.bmp is None:
             return
-        size = self.editPanel.bmp.GetSize()
+        size = self.editPanel.bmp.size()
         w, h = size.width(), size.height()
         dlg = QFileDialog(self, f"Import 16-color {w}x{h} GIF", "", "GIF files (*.gif)")
         dlg.setFileMode(QFileDialog.ExistingFile)
@@ -243,12 +313,15 @@ class BattleSpritePanel(rompanel.ROMPanel):
                 img = Image.open(fn)
                 imgw, imgh = img.size
                 imgpal = img.getpalette()
-                if img.size != (w, h):
-                    QMessageBox.warning(self, f"{fn} is {imgw}x{imgh} and should be {w}x{h}.", self.parent.baseTitle + " -- Error")
+                if (imgw, imgh) != (w, h):
+                    QMessageBox.warning(self, f"{fn} is {imgw}x{imgh} and should be {w}x{h}.",
+                                        self.parent.baseTitle + " -- Error")
                 elif img.format != "GIF" or imgpal is None:
-                    QMessageBox.warning(self, f"{fn} is not a GIF or is improperly formatted.", self.parent.baseTitle + " -- Error")
+                    QMessageBox.warning(self, f"{fn} is not a GIF or is improperly formatted.",
+                                        self.parent.baseTitle + " -- Error")
                 else:
-                    cols = ["#%02x%02x%02x" % (imgpal[i]//16*17, imgpal[i+1]//16*17, imgpal[i+2]//16*17) for i in range(0, 48, 3)]
+                    cols = ["#%02x%02x%02x" % (imgpal[i]//16*17, imgpal[i+1]//16*17, imgpal[i+2]//16*17)
+                            for i in range(0, 48, 3)]
                     pal = data.Palette()
                     pal.init(cols)
                     self.editPanel.palette = pal
@@ -256,6 +329,7 @@ class BattleSpritePanel(rompanel.ROMPanel):
                         self.animPanel.palette = pal
                     self.palette = pal
                     self.battleSprite.palettes[self.curPaletteIdx] = pal
+
                     imgdata = list(img.getdata())
                     pixels = "".join(["%x" % d for d in imgdata])
                     pixels = [pixels[i:i+w] for i in range(0, w*h, w)]
@@ -265,18 +339,20 @@ class BattleSpritePanel(rompanel.ROMPanel):
                     for i in range(len(newtiles)):
                         newtiles[order[i]] = self.curFrame.tiles[i]
                     self.curFrame.tiles = newtiles
+
                     self.changeBattleSprite()
                     self.updateAnimFrames()
                     self.changeColors()
                     self.modify()
                 del img
-            except IOError:
-                QMessageBox.warning(self, f"{fn} is not a GIF or is improperly formatted.", self.parent.baseTitle + " -- Error")
+            except Exception as e:
+                QMessageBox.warning(self, f"{fn} is not a GIF or is improperly formatted.",
+                                    self.parent.baseTitle + " -- Error")
 
     def OnExportImage(self):
-        if not shiboken6.isValid(self.editPanel):
+        if not shiboken6.isValid(self.editPanel) or self.editPanel.bmp is None:
             return
-        size = self.editPanel.bmp.GetSize()
+        size = self.editPanel.bmp.size()
         w, h = size.width(), size.height()
         dlg = QFileDialog(self, f"Export 16-color {w}x{h} GIF", "", "GIF files (*.gif)")
         dlg.setAcceptMode(QFileDialog.AcceptSave)
@@ -290,10 +366,15 @@ class BattleSpritePanel(rompanel.ROMPanel):
             img.save(fn, "GIF")
 
     def OnShow(self, event=None):
-        for p in range(16):
-            if shiboken6.isValid(self.colorPanels[p]):
-                self.colorPanels[p].setStyleSheet(f"background-color: {self.palette.colors[p]};")
-                self.colorPanels[p].update()
+        self.changeColors()
+        if hasattr(self, 'selectedColorLeft') and shiboken6.isValid(self.selectedColorLeft):
+            self.selectedColorLeft.setStyleSheet(
+                f"border: 2px solid #555; border-radius: 4px; background-color: {self.palette.colors[self.color_left]};"
+            )
+        if hasattr(self, 'selectedColorRight') and shiboken6.isValid(self.selectedColorRight):
+            self.selectedColorRight.setStyleSheet(
+                f"border: 2px solid #555; border-radius: 4px; background-color: {self.palette.colors[self.color_right]};"
+            )
 
     def TimerTest(self):
         self.animFrameIdx ^= 1
@@ -303,8 +384,13 @@ class BattleSpritePanel(rompanel.ROMPanel):
         palette = self.palette
         for c in range(len(self.colorPanels)):
             if shiboken6.isValid(self.colorPanels[c]):
-                self.colorPanels[c].setStyleSheet(f"background-color: {palette.colors[c]};")
+                self.colorPanels[c].setStyleSheet(
+                    f"background-color: {palette.colors[c]}; border: none; border-radius: 3px;"
+                )
                 self.colorPanels[c].update()
+
+    def refreshPixels(self):
+        pass
 
     def OnSelectPalette(self, idx):
         self.curPaletteIdx = idx
@@ -315,20 +401,19 @@ class BattleSpritePanel(rompanel.ROMPanel):
         self.curFrameIdx = idx
         self.changeBattleSprite()
 
-    def changeEditColor(self, button, num):
-        pass
-
-    def refreshPixels(self):
-        pass
-
-    def OnChangeAnim(self, button_id):
-        pass
-
-    def OnSelectMode(self, mode_id):
-        pass
-
-    def OnSelectBattleSprite(self, idx):
-        self.changeBattleSprite(idx)
+    def changeZoom(self, scale):
+        if not hasattr(self, 'editPanel') or not shiboken6.isValid(self.editPanel):
+            return
+        current_pixels = self.editPanel.pixels
+        w, h = self.editPanel.width, self.editPanel.height
+        old_ep = self.editPanel
+        self.editPanel = rompanel.SpritePanel(self, None, w, h, self.palette, scale=scale, bg=16, func="edit")
+        self.scrollArea.takeWidget()
+        old_ep.deleteLater()
+        self.scrollArea.setWidget(self.editPanel)
+        self.editPanel.refreshSprite(current_pixels, force=True)
+        self.editPanel.update()
+        self.current_scale = scale
 
     def changeBattleSprite(self, num=None):
         if num is not None:
@@ -337,41 +422,57 @@ class BattleSpritePanel(rompanel.ROMPanel):
             self.curPaletteIdx = 0
             self.curFrameIdx = 0
             self.battleSprite = self.rom.data["battle_sprites"][num]
+
+            if num < self.rom.sectionData["battle_sprites"][2][0]:
+                new_w = 96
+            else:
+                new_w = 128
+            new_h = 96
+
+            self.editPanel.width = new_w
+            self.editPanel.height = new_h
+            self.animPanel.width = new_w
+            self.animPanel.height = new_h
+
             if shiboken6.isValid(self.editPanel):
-                if num < self.rom.sectionData["battle_sprites"][2][0]:
-                    self.editPanel.width = 96
-                else:
-                    self.editPanel.width = 128
-                self.editPanel.height = 96
+                self.editPanel.setFixedSize(
+                    int(new_w * self.editPanel.scale + self.editPanel.xpad * 2),
+                    int(new_h * self.editPanel.scale + self.editPanel.ypad * 2)
+                )
             if shiboken6.isValid(self.animPanel):
-                if num < self.rom.sectionData["battle_sprites"][2][0]:
-                    self.animPanel.width = 96
-                else:
-                    self.animPanel.width = 128
-                self.animPanel.height = 96
+                self.animPanel.setFixedSize(
+                    int(new_w * self.animPanel.scale + self.animPanel.xpad * 2),
+                    int(new_h * self.animPanel.scale + self.animPanel.ypad * 2)
+                )
+
             self.updateAnimFrames()
             self.animSpdCtrl.setValue(self.battleSprite.animSpeed)
             self.mystCtrl.setValue(int(self.battleSprite.myst, 16))
+
             self.frameList.clear()
-            self.frameList.addItems(["Frame %i" % i for i,p in enumerate(self.battleSprite.frames)])
+            self.frameList.addItems(["Frame %i" % i for i, p in enumerate(self.battleSprite.frames)])
             self.frameList.setCurrentIndex(self.curFrameIdx)
+
             self.paletteList.clear()
-            self.paletteList.addItems(["Palette %i" % i for i,p in enumerate(self.battleSprite.palettes)])
+            self.paletteList.addItems(["Palette %i" % i for i, p in enumerate(self.battleSprite.palettes)])
             self.paletteList.setCurrentIndex(self.curPaletteIdx)
+
         self.palette = self.curPalette
         if shiboken6.isValid(self.editPanel):
             self.editPanel.palette = self.palette
         if shiboken6.isValid(self.animPanel):
             self.animPanel.palette = self.palette
+
         self.changeColors()
+
         if shiboken6.isValid(self.editPanel):
             tw = self.editPanel.width // 8
             th = self.editPanel.height // 8
             pixels = self.curFrame.getPixelRows(tw, th)
             self.editPanel.refreshSprite(pixels, force=True)
-            self.updateModifiedIndicator(self.battleSprite.modified)
             self.editPanel.update()
-        self.refreshPixels()
+
+        self.updateModifiedIndicator(self.battleSprite.modified)
 
     def changeAnim(self, num):
         self.animCur = num
@@ -385,7 +486,8 @@ class BattleSpritePanel(rompanel.ROMPanel):
     def updateAnimFrames(self):
         if not shiboken6.isValid(self.animPanel):
             return
-        tw, th = self.animPanel.width // 8, self.animPanel.height // 8
+        tw = self.animPanel.width // 8
+        th = self.animPanel.height // 8
         self.animFrames = []
         for f in self.battleSprite.frames:
             self.animFrames.append(f.getPixelRows(tw, th))
@@ -395,19 +497,6 @@ class BattleSpritePanel(rompanel.ROMPanel):
 
     def getCurrentData(self):
         return self.battleSprite
-
-    def iterateData(self):
-        sprs = len(self.battleSpriteList) if hasattr(self, 'battleSpriteList') else 0
-        for i in range(sprs):
-            self.changeBattleSprite(i)
-            num_frames = self.frameList.count()
-            num_pals = self.paletteList.count()
-            for j in range(num_pals):
-                for k in range(num_frames):
-                    self.curFrameIdx = k
-                    self.curPaletteIdx = j
-                    self.changeBattleSprite()
-                    yield ("battle_sprite", i, j, k)
 
     changeSelection = changeBattleSprite
 

@@ -345,7 +345,7 @@ class SpritePanel(QWidget):
 
                 spr = parent.getCurrentSpriteObject()
                 oldpix = spr.raw_pixels[:] if hasattr(spr, 'raw_pixels') else ""
-                oldpix2 = spr.raw_pixels2[:] if hasattr(parent, 'frame') else ""
+                oldpix2 = spr.raw_pixels2[:] if (hasattr(spr, 'raw_pixels2') and hasattr(parent, 'frame')) else ""
 
                 if event.modifiers() & Qt.ShiftModifier:
                     col = int(self.pixels[y][x], 16)
@@ -366,7 +366,7 @@ class SpritePanel(QWidget):
                         self.pixels[y] = self.pixels[y][:x] + col + self.pixels[y][x+1:]
                         parent.modify()
                         # Обновляем сырые данные
-                        raw = spr.convertFromPixelRows(self.pixels)
+                        raw = spr.convertFromPixelRows(self.pixels) if hasattr(spr, 'convertFromPixelRows') else None
                         if raw is not None:
                             if not hasattr(parent, 'frame') or parent.frame == 0:
                                 spr.raw_pixels = raw
@@ -394,7 +394,7 @@ class SpritePanel(QWidget):
                         self.pixels[cy] = self.pixels[cy][:cx] + col + self.pixels[cy][cx+1:]
                         queue.extend([(cx - 1, cy), (cx + 1, cy), (cx, cy - 1), (cx, cy + 1)])
                     parent.modify()
-                    raw = spr.convertFromPixelRows(self.pixels)
+                    raw = spr.convertFromPixelRows(self.pixels) if hasattr(spr, 'convertFromPixelRows') else None
                     if raw is not None:
                         if not hasattr(parent, 'frame') or parent.frame == 0:
                             spr.raw_pixels = raw
