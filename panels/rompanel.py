@@ -259,7 +259,7 @@ class SpritePanel(QWidget):
             self.mouseMoveEvent = func
             self.mouseReleaseEvent = func
         else:
-            self.mousePressEvent = func
+            self.mousePressEvent = func if func is not None else lambda event: None
             self.setCursor(Qt.PointingHandCursor)
 
     def refreshSprite(self, pixels=None, force=False):

@@ -2,7 +2,7 @@ import binascii
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QGroupBox,
     QLabel, QPushButton, QRadioButton, QFileDialog, QMessageBox,
-    QButtonGroup, QDialog
+    QButtonGroup, QDialog, QComboBox          # <-- добавлен QComboBox
 )
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QImage, QPixmap
@@ -16,7 +16,6 @@ class SpritePanel(rompanel.ROMPanel):
     frameTitle = "Sprite Editor"
 
     def init(self):
-        # Палитра
         self.palette = data.Palette()
         self.palette.init(["#000000"] * 16)
         if self.rom and "palettes" in self.rom.data:
@@ -33,6 +32,15 @@ class SpritePanel(rompanel.ROMPanel):
         self.animCur = 0
         self.animFrame = 0
         self.sprite = None
+
+        # ---------- Select Sprite ----------
+        sbs0 = QGroupBox("Select Sprite")
+        sbs0_layout = QVBoxLayout(sbs0)
+        self.spriteList = QComboBox()
+        sprite_names = [self.rom.data["sprites"][s*3].name for s in range(len(self.rom.data["sprites"])//3)]
+        self.spriteList.addItems(sprite_names)
+        self.spriteList.setCurrentIndex(0)
+        sbs0_layout.addWidget(self.spriteList)
 
         # ==================== Direction ====================
         sbs1 = QGroupBox("Direction")
@@ -156,10 +164,11 @@ class SpritePanel(rompanel.ROMPanel):
         midRightSizer.addWidget(sbs3)
         midSizer.addLayout(midRightSizer)
 
-        self.sizer.addWidget(sbs1, 0, 0, 1, 2)
+        self.sizer.addWidget(sbs0, 0, 0, 1, 2)          # строка 0 – Select Sprite
+        self.sizer.addWidget(sbs1, 1, 0, 1, 2)          # строка 1 – Direction
         midContainer = QWidget()
         midContainer.setLayout(midSizer)
-        self.sizer.addWidget(midContainer, 1, 0, 1, 2)
+        self.sizer.addWidget(midContainer, 2, 0, 1, 2)  # строка 2 – редактор + анимация
 
         # Load first sprite
         if self.rom and "sprites" in self.rom.data and len(self.rom.data["sprites"]) >= 3:
@@ -174,6 +183,7 @@ class SpritePanel(rompanel.ROMPanel):
         self.importButton.clicked.connect(self.OnImportImage)
         self.exportButton.clicked.connect(self.OnExportImage)
         self.switchButton.clicked.connect(self.OnSwitchFrame)
+        self.spriteList.currentIndexChanged.connect(self.OnSelectSprite)
 
         for i, btn in enumerate(self.animButtons):
             btn.clicked.connect(lambda checked=False, idx=i: self.changeAnim(idx))
@@ -290,6 +300,9 @@ class SpritePanel(rompanel.ROMPanel):
     def OnSwitchFrame(self):
         self.frame ^= 1
         self.changeSprite()
+
+    def OnSelectSprite(self, idx):
+        self.changeSprite(idx * 3)
 
     def changeSprite(self, num=None):
         if num is not None:
