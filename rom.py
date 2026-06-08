@@ -1162,8 +1162,6 @@ class ROM(object):
         
     def mapBlockSubroutine(self, source, addr, map, idx):
 
-        # ---------------------
-        # ---------------------
         # test map data load
 
         if type(source) == str:
@@ -1173,13 +1171,12 @@ class ROM(object):
 
         def getNextBarrel(barrel, reader):
             prev = len(barrel)
-            barrel += "".join([bin(int(l, 16), 4) for l in func(reader, 2)])
-            # print ">>> Reading from %s... (%s)%s" % (hex(reader)[2:], barrel[:prev], barrel[prev:])
+            barrel += "".join([format(int(l, 16), '04b') for l in func(reader, 2)])
             reader += 2
             return barrel, reader
 
         reader = addr
-        cmds = "".join([bin(int(l, 16), 4) for l in func(reader, 2)])
+        cmds = "".join([format(int(l, 16), '04b') for l in func(reader, 2)])
         reader += 2
         barrel = cmds[-2:]
         cmd = ""
@@ -1381,7 +1378,7 @@ class ROM(object):
 
         def getNextBarrel(barrel, reader):
             prev = len(barrel)
-            barrel += "".join([bin(int(l, 16), 4) for l in func(reader, 2)])
+            barrel += "".join([format(int(l, 16), '04b') for l in func(reader, 2)])
             # print ">>> Reading from %s... (%s)%s" % (hex(reader)[2:], barrel[:prev], barrel[prev:])
             reader += 2
             return barrel, reader

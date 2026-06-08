@@ -5,7 +5,9 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt, QEvent
 from PySide6.QtGui import QIcon, QFont, QWheelEvent, QMouseEvent, QResizeEvent, QCloseEvent
+from PySide6.QtWidgets import QSizePolicy
 import rompanel, consts
+
 
 caravanIcon = QIcon("caravan.ico")
 
@@ -112,6 +114,21 @@ class MapViewer(QWidget):
             # Временно: MapViewPanel будет заменена позже, но используем как есть (предполагаем, что она портирована)
             self.mapViewPanel = rompanel.MapViewPanel(self.mainPanel, None, 24*20, 24*20, self.palette, scale=1, bg=16, func=self.OnClickViewPanel, edit=True, grid=24)
             self.mapViewPanel.id = 0
+            self.mapViewPanel.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+            self.mapViewPanel.setMinimumSize(480, 480)
+            self.mapViewPanel.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+            self.mapViewPanel.setMinimumSize(480, 480)
+            
+            from PySide6.QtGui import QPen, QColor
+            
+            self.mapViewPanel.eventCoordPen = QPen(QColor(255, 0, 0), 2)
+            self.mapViewPanel.copySrcPen = QPen(QColor(0, 255, 0), 2)
+            self.mapViewPanel.copyDestPen = QPen(QColor(0, 0, 255), 2)
+            self.mapViewPanel.warpCoordPen = QPen(QColor(255, 255, 0), 2)
+            self.mapViewPanel.eventPen = QPen(QColor(255, 0, 255), 2)
+            self.mapViewPanel.tablePen = QPen(QColor(0, 255, 255), 2)
+            self.mapViewPanel.floorPen = QPen(QColor(128, 128, 128), 2)
+
 
             # Скроллбары
             self.mapViewBarX = QScrollBar(Qt.Horizontal, self.mainPanel)
@@ -136,10 +153,13 @@ class MapViewer(QWidget):
             self.viewGrid.addWidget(self.mapViewBarY, 0, 1)
             self.viewGrid.addWidget(self.mapViewBarX, 1, 0)
             self.viewGrid.addWidget(self.gridCheck, 1, 1, Qt.AlignCenter)
+            
+            self.viewGrid.setRowStretch(0, 1)
+            self.viewGrid.setColumnStretch(0, 1)
 
             # Правая боковая панель
             self.sideSizer = QVBoxLayout()
-            self.sideSizer.setMinimumWidth(160)
+            self.setMinimumWidth(160)
 
             mouseText = QLabel("Mouse")
             self.mousePosText = QLabel("(0,0)")
@@ -212,7 +232,7 @@ class MapViewer(QWidget):
 
             # Основной макет для MapViewer (сам виджет)
             frmSizer = QVBoxLayout(self)
-            frmSizer.addWidget(self.mainPanel)
+            frmSizer.addWidget(self.mainPanel, 1)
             self.setLayout(frmSizer)
 
             # Замена wx.EVT_SIZE
@@ -264,10 +284,12 @@ class MapViewer(QWidget):
 
     def OnToggleDispCheck(self, state):
         self.mapViewPanel.drawBlocks = (state == Qt.Checked)
+        self.mapViewPanel.update()
         self.refreshMapView()
 
     def OnToggleFlagCheck(self, state):
         self.mapViewPanel.drawFlags = (state == Qt.Checked)
+        self.mapViewPanel.update()
         self.refreshMapView()
 
     def OnToggleTopCheck(self, state):
@@ -327,16 +349,16 @@ class MapViewer(QWidget):
         s = self.mapViewPanel.scale
         maxX = self.map.width * 24
         maxY = self.map.height * 24
-        sizeX = self.mapViewPanel.width()
-        sizeY = self.mapViewPanel.height()
+        sizeX = self.mapViewPanel.size().width()
+        sizeY = self.mapViewPanel.size().height()
         self.mapViewPanel.curViewX = max(0, min(maxX - sizeX / s, x))
         self.mapViewPanel.curViewY = max(0, min(maxY - sizeY / s, y))
         self.mapViewBarX.setValue(x)
         self.mapViewBarY.setValue(y)
 
     def centerViewPos(self, x, y):
-        sizeX = self.mapViewPanel.width()
-        sizeY = self.mapViewPanel.height()
+        sizeX = self.mapViewPanel.size().width()
+        sizeY = self.mapViewPanel.size().height()
         self.setViewPos(x - sizeX/2, y - sizeY/2)
 
     def refreshMapView(self):
@@ -364,8 +386,8 @@ class MapViewer(QWidget):
 
     def updateScrollbars(self):
         s = self.mapViewPanel.scale
-        x = self.mapViewPanel.width() / s
-        y = self.mapViewPanel.height() / s
+        x = self.mapViewPanel.size().width() / s
+        y = self.mapViewPanel.size().height() / s
         self.mapViewBarX.setPageStep(x)
         self.mapViewBarX.setMaximum(self.map.width * 24 - x)
         self.mapViewBarY.setPageStep(y)

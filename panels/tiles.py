@@ -2,9 +2,9 @@ import binascii
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QGroupBox,
     QLabel, QPushButton, QComboBox, QRadioButton, QListWidget,
-    QScrollArea, QFileDialog, QMessageBox, QAbstractItemView
+    QFileDialog, QMessageBox, QDialog
 )
-from PySide6.QtCore import Qt, QTimer
+from PySide6.QtCore import Qt
 from PySide6.QtGui import QPixmap, QImage, QColor
 import data
 from PIL import Image
@@ -13,78 +13,87 @@ import rompanel
 h2i = lambda i: int(i, 16)
 
 class TilePanel(rompanel.ROMPanel):
-    
+
     frameTitle = "Tileset Editor"
-    
+
     def init(self):
-        
+
         self.palette = self.rom.data["palettes"][0]
         self.mode = 0
-        
+
         self.color_left = 0
         self.color_right = 0
-        
+
         self.tileset = None
         self.tile = None
         self.curTile = 0
-        
-        leftSizer = QVBoxLayout()
-        
+
+        # ---------- Группы ----------
         sbs1 = QGroupBox("Tools")
         sbs1_layout = QVBoxLayout(sbs1)
-        
+
         sbs2 = QGroupBox("Maps using this tileset")
         sbs2_layout = QVBoxLayout(sbs2)
-        
+
         sbs3 = QGroupBox("Tile block editor")
         sbs3_layout = QVBoxLayout(sbs3)
-        
+
         sbs4 = QGroupBox("Edit")
         sbs4_layout = QHBoxLayout(sbs4)
-        
+
         sbs5 = QGroupBox("Tileset")
         sbs5_layout = QVBoxLayout(sbs5)
-        
-        # Maps list
+
+        # ---------- Выбор тайлсета ----------
+        tilesetLabel = QLabel("Tileset:")
+        self.tilesetList = QComboBox()
+        self.tilesetList.addItems([ts.name for ts in self.rom.data["tilesets"]])
+        self.tilesetList.setCurrentIndex(0)
+
+        # ---------- Карты, использующие тайлсет ----------
         self.mapList = QListWidget()
         self.mapList.setFixedSize(150, 80)
         sbs2_layout.addWidget(self.mapList)
-        
-        # Colors + palette
+
+        # ---------- Редактор отдельного тайла ----------
+        text2 = QLabel("Tile (Color 0 = transparent)")
+        self.editPanel = rompanel.SpritePanel(
+            self, None, 8, 8, self.palette, scale=20, bg=16, func="edit"
+        )
+
+        # ---------- Цветовая палитра ----------
         text1 = QLabel("Colors")
-        text2 = QLabel("Tile (Color 0 = trans)")
         text3 = QLabel("Left-Click")
         text4 = QLabel("Right-Click")
         text5 = QLabel("Mode")
         text6 = QLabel("Palette")
-        
-        self.editPanel = rompanel.SpritePanel(self, None, 8, 8, self.palette, scale=20, bg=16, func="edit")
-        
+
         self.colorPanels = []
         for p in range(16):
-            self.colorPanels.append(rompanel.ColorPanel2(self, None, "#000000", num=p))
-        
+            cp = rompanel.ColorPanel2(self, None, "#000000", num=p)
+            self.colorPanels.append(cp)
+
         self.paletteList = QComboBox()
         self.paletteList.addItems([s.name for s in self.rom.data["palettes"]])
         self.paletteList.setCurrentIndex(0)
-        
+
         sbs4left = QVBoxLayout()
         colorSizer = QGridLayout()
         for i, cp in enumerate(self.colorPanels):
             colorSizer.addWidget(cp, i // 2, i % 2)
-        
-        sbs4left.addWidget(text1, 0, Qt.AlignCenter)
+
+        sbs4left.addWidget(text1, alignment=Qt.AlignCenter)
         sbs4left.addLayout(colorSizer)
-        sbs4left.addWidget(text6, 0, Qt.AlignCenter)
-        
+        sbs4left.addWidget(text6, alignment=Qt.AlignCenter)
+
         sbs4mid = QVBoxLayout()
-        sbs4mid.addWidget(text2, 0, Qt.AlignCenter)
-        sbs4mid.addWidget(self.editPanel, 0, Qt.AlignCenter)
-        sbs4mid.addWidget(self.paletteList, 0, Qt.AlignCenter)
-        
+        sbs4mid.addWidget(text2, alignment=Qt.AlignCenter)
+        sbs4mid.addWidget(self.editPanel, alignment=Qt.AlignCenter)
+        sbs4mid.addWidget(self.paletteList, alignment=Qt.AlignCenter)
+
         sbs4right = QVBoxLayout()
-        self.selectedColorLeft = rompanel.ColorPanel(self, None, "#000000", size=(40,40))
-        self.selectedColorRight = rompanel.ColorPanel(self, None, "#000000", size=(40,40))
+        self.selectedColorLeft = rompanel.ColorPanel(self, None, "#000000", size=(40,40), enable=False)
+        self.selectedColorRight = rompanel.ColorPanel(self, None, "#000000", size=(40,40), enable=False)
         self.selectedColorLeft.color = 0
         self.selectedColorRight.color = 0
 
@@ -92,69 +101,79 @@ class TilePanel(rompanel.ROMPanel):
         self.modeFill = QRadioButton("Floodfill")
         self.modeReplace = QRadioButton("Replace")
         self.modePixel.setChecked(True)
-        
-        sbs4right.addWidget(text3, 0, Qt.AlignCenter)
-        sbs4right.addWidget(self.selectedColorLeft, 0, Qt.AlignCenter)
-        sbs4right.addWidget(text4, 0, Qt.AlignCenter)
-        sbs4right.addWidget(self.selectedColorRight, 0, Qt.AlignCenter)
-        sbs4right.addWidget(text5, 0, Qt.AlignCenter)
-        sbs4right.addWidget(self.modePixel, 0, Qt.AlignLeft)
-        sbs4right.addWidget(self.modeFill, 0, Qt.AlignLeft)
-        sbs4right.addWidget(self.modeReplace, 0, Qt.AlignLeft)
-        
+
+        sbs4right.addWidget(text3, alignment=Qt.AlignCenter)
+        sbs4right.addWidget(self.selectedColorLeft, alignment=Qt.AlignCenter)
+        sbs4right.addWidget(text4, alignment=Qt.AlignCenter)
+        sbs4right.addWidget(self.selectedColorRight, alignment=Qt.AlignCenter)
+        sbs4right.addWidget(text5, alignment=Qt.AlignCenter)
+        sbs4right.addWidget(self.modePixel)
+        sbs4right.addWidget(self.modeFill)
+        sbs4right.addWidget(self.modeReplace)
+
         sbs4_layout.addLayout(sbs4left, 0)
         sbs4_layout.addLayout(sbs4mid, 1)
         sbs4_layout.addLayout(sbs4right, 0)
-        
-        # Tile block editor (3x3 grid)
+
+        # ---------- Блок 3x3 (предпросмотр) ----------
         tps = QGridLayout()
         self.tilePanels = []
         for p in range(9):
-            tp = rompanel.SpritePanel(self, None, 8, 8, self.palette, scale=4, bg=16, func=self.OnChangeLayoutTile)
+            tp = rompanel.SpritePanel(
+                self, None, 8, 8, self.palette, scale=4, bg=16,
+                func=self.OnChangeLayoutTile, edit=True
+            )
             tp.num = 0
             self.tilePanels.append(tp)
             tps.addWidget(tp, p // 3, p % 3)
-        
+
         sbs3_layout.addLayout(tps)
-        
-        # Import/Export buttons
+
+        # ---------- Импорт / Экспорт ----------
         self.importButton = QPushButton("Import")
-        self.importButton.setFixedSize(40, 20)
         self.exportButton = QPushButton("Export")
-        self.exportButton.setFixedSize(40, 20)
-        sbs1_layout.addWidget(self.importButton, 0, Qt.AlignCenter)
-        sbs1_layout.addWidget(self.exportButton, 0, Qt.AlignCenter)
-        
-        # Tileset panel
-        self.tilesetPanel = rompanel.SpritePanel(self, None, 8*16, 8*8, self.palette, scale=3, bg=16, func=self.OnClickTilesetPanel, grid=8)
+        sbs1_layout.addWidget(self.importButton, alignment=Qt.AlignCenter)
+        sbs1_layout.addWidget(self.exportButton, alignment=Qt.AlignCenter)
+
+        # ---------- Панель всего тайлсета ----------
+        self.tilesetPanel = rompanel.SpritePanel(
+            self, None, 8*16, 8*8, self.palette, scale=3, bg=16,
+            func=self.OnClickTilesetPanel, edit=True, grid=8
+        )
         sbs5_layout.addWidget(self.tilesetPanel)
-        
-        # Layout
+
+        # ---------- Главный layout ----------
         topSizer = QHBoxLayout()
         topLeftSizer = QVBoxLayout()
+        tilesetSelectSizer = QHBoxLayout()
+        tilesetSelectSizer.addWidget(tilesetLabel)
+        tilesetSelectSizer.addWidget(self.tilesetList)
+        topLeftSizer.addLayout(tilesetSelectSizer)
         topLeftSizer.addWidget(sbs2)
-        
+
         topSizer.addLayout(topLeftSizer)
         topSizer.addWidget(sbs4)
-        
+
         bottomSizer = QHBoxLayout()
         bottomSizer.addWidget(sbs3)
         bottomSizer.addWidget(sbs5)
         bottomSizer.addWidget(sbs1)
-        
+
         self.sizer.addLayout(topSizer, 0, 0)
         self.sizer.addLayout(bottomSizer, 1, 0)
-        
-        self.changeTileset(0)
-        self.changeColors()
-        
-        # Connections
+
+        # ---------- Сигналы ----------
+        self.tilesetList.currentIndexChanged.connect(self.OnSelectTileset)
         self.paletteList.currentIndexChanged.connect(self.OnSelectPalette)
         self.importButton.clicked.connect(self.OnImportImage)
         self.exportButton.clicked.connect(self.OnExportImage)
         self.modePixel.toggled.connect(self.OnSelectMode)
         self.modeFill.toggled.connect(self.OnSelectMode)
         self.modeReplace.toggled.connect(self.OnSelectMode)
+
+        # Начальная загрузка
+        self.changeTileset(0)
+        self.changeColors()
 
     def OnShow(self):
         for p in range(16):
@@ -164,7 +183,7 @@ class TilePanel(rompanel.ROMPanel):
         self.selectedColorRight.setStyleSheet(f"background-color: {self.palette.colors[self.color_right]};")
 
     def OnImportImage(self):
-        size = self.tilesetPanel.bmp.GetSize()
+        size = self.tilesetPanel.bmp.size()
         w, h = size.width(), size.height()
         dlg = QFileDialog(self, f"Import 16-color {w}x{h} GIF", "", "GIF files (*.gif)")
         dlg.setFileMode(QFileDialog.ExistingFile)
@@ -175,9 +194,11 @@ class TilePanel(rompanel.ROMPanel):
                 imgw, imgh = img.size
                 imgpal = img.getpalette()
                 if img.size != (w, h):
-                    QMessageBox.warning(self, f"{fn} is {imgw}x{imgh} and should be {w}x{h}.", self.parent.baseTitle + " -- Error")
+                    QMessageBox.warning(self, f"{fn} is {imgw}x{imgh} and should be {w}x{h}.",
+                                        self.parent.baseTitle + " -- Error")
                 elif img.format != "GIF" or imgpal is None:
-                    QMessageBox.warning(self, f"{fn} is not a GIF or is improperly formatted.", self.parent.baseTitle + " -- Error")
+                    QMessageBox.warning(self, f"{fn} is not a GIF or is improperly formatted.",
+                                        self.parent.baseTitle + " -- Error")
                 else:
                     cols = ["#%02x%02x%02x" % (imgpal[i]//16*17, imgpal[i+1]//16*17, imgpal[i+2]//16*17) for i in range(0, 48, 3)]
                     pal = data.Palette()
@@ -199,10 +220,11 @@ class TilePanel(rompanel.ROMPanel):
                     self.modify()
                 del img
             except IOError:
-                QMessageBox.warning(self, f"{fn} is not a GIF or is improperly formatted.", self.parent.baseTitle + " -- Error")
+                QMessageBox.warning(self, f"{fn} is not a GIF or is improperly formatted.",
+                                    self.parent.baseTitle + " -- Error")
 
     def OnExportImage(self):
-        size = self.tilesetPanel.bmp.GetSize()
+        size = self.tilesetPanel.bmp.size()
         w, h = size.width(), size.height()
         dlg = QFileDialog(self, f"Export 16-color {w}x{h} GIF", "", "GIF files (*.gif)")
         dlg.setAcceptMode(QFileDialog.AcceptSave)
@@ -230,12 +252,10 @@ class TilePanel(rompanel.ROMPanel):
     def changeEditColor(self, button, num):
         if button == 0:
             self.color_left = num
-        else:
-            self.color_right = num
-        if button == 0:
             self.selectedColorLeft.color = num
             self.selectedColorLeft.setStyleSheet(f"background-color: {self.palette.colors[num]};")
         else:
+            self.color_right = num
             self.selectedColorRight.color = num
             self.selectedColorRight.setStyleSheet(f"background-color: {self.palette.colors[num]};")
 
@@ -244,13 +264,13 @@ class TilePanel(rompanel.ROMPanel):
             tp = self.tilePanels[p]
             tp.refreshSprite(self.tileset.tiles[tp.num].pixels)
             tp.update()
-        
+
         self.tilesetPanel.pixels = []
         for tRow in range(8):
             for pRow in range(8):
                 row = "".join([self.tileset.tiles[tRow*16+to].pixels[pRow] for to in range(16)])
                 self.tilesetPanel.pixels.append(row)
-        
+
         self.tilesetPanel.refreshSprite()
         self.tilesetPanel.update()
 
@@ -267,10 +287,6 @@ class TilePanel(rompanel.ROMPanel):
         self.changeTile(y*16 + x)
         self.refreshPixels()
 
-    def OnEditTile(self, evt):
-        obj = self.sender()
-        obj.OnEdit(evt)  # делегируем стандартный обработчик SpritePanel
-
     def OnSelectMode(self, checked):
         if self.modePixel.isChecked():
             self.mode = 0
@@ -283,7 +299,6 @@ class TilePanel(rompanel.ROMPanel):
         self.changeTileset(idx)
 
     def OnChangeLayoutTile(self, obj):
-        # obj – это SpritePanel, на которую кликнули
         obj.refreshSprite(self.tile.pixels)
         obj.num = self.curTile
         obj.update()
@@ -304,9 +319,6 @@ class TilePanel(rompanel.ROMPanel):
         pixels = []
         tw = self.tilesetPanel.width // 8
         th = self.tilesetPanel.height // 8
-
-        print(tw, th)
-        print(len(self.tileset.tiles))
 
         order = self.tileset.getTileOrder(tw, th)
         tiles = [self.tileset.tiles[t] for t in order]

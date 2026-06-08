@@ -23,7 +23,7 @@ class SpritePanel(rompanel.ROMPanel):
             if pal is not None:
                 self.palette = pal
 
-        self.side = 0
+        self.side = 2
         self.frame = 0
         self.mode = 0
         self.color_left = 0
@@ -49,7 +49,7 @@ class SpritePanel(rompanel.ROMPanel):
         self.facingRadioUp = QRadioButton("Up")
         self.facingRadioSide = QRadioButton("Left/Right")
         self.facingRadioDown = QRadioButton("Down")
-        self.facingRadioSide.setChecked(True)
+        self.facingRadioDown.setChecked(True)
 
         self.facingGroup = QButtonGroup()
         self.facingGroup.addButton(self.facingRadioUp, 0)
@@ -78,7 +78,7 @@ class SpritePanel(rompanel.ROMPanel):
         sbs4_layout = QHBoxLayout(sbs4)
 
         text1 = QLabel("Colors")
-        text2 = QLabel("Sprite (Color 0 = trans)")
+        text2 = QLabel("Sprite (Color 0 = transparent)")
         text3 = QLabel("Left-Click")
         text4 = QLabel("Right-Click")
         text5 = QLabel("Mode")

@@ -134,7 +134,7 @@ class ColorPanel(QFrame):
             while p and not hasattr(p, 'changeEditColor'):
                 p = p.parent()
             if p:
-                p.changeEditColor(self.num)
+                p.changeEditColor(0, self.num)
 
 
 class ColorPanel2(QFrame):
@@ -243,7 +243,13 @@ class SpritePanel(QWidget):
         self.pixelsStack = []
         self.bmpStack = []
 
-        self.setFixedSize(int(width * scale + xpad * 2), int(height * scale + ypad * 2))
+        if self.__class__.__name__ == 'MapViewPanel':
+            self.setMinimumSize(0, 0)
+            self.setMaximumSize(16777215, 16777215)
+            self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        else:
+            self.setFixedSize(int(width * scale + xpad * 2), int(height * scale + ypad * 2))
+        
         self.setAttribute(Qt.WA_OpaquePaintEvent, False)
 
         self.refreshSprite(self.pixels)
@@ -255,9 +261,15 @@ class SpritePanel(QWidget):
             self.mouseReleaseEvent = self.OnEdit
         elif edit:
             self.setMouseTracking(True)
-            self.mousePressEvent = func
-            self.mouseMoveEvent = func
-            self.mouseReleaseEvent = func
+            self.mouseX = 0
+            self.mouseY = 0
+            self.lastButton = Qt.NoButton
+            self.shift = False
+            self.ctrl = False
+            self.func = func
+            self.mousePressEvent = self._onEditMouse
+            self.mouseMoveEvent = self._onEditMouse
+            self.mouseReleaseEvent = self._onEditMouse
         else:
             self.mousePressEvent = func if func is not None else lambda event: None
             self.setCursor(Qt.PointingHandCursor)
@@ -292,6 +304,15 @@ class SpritePanel(QWidget):
         else:
             self.bmp = self.bmpStack[self.pixelsStack.index(self.pixels)]
         self.update()
+        
+    def _onEditMouse(self, event):
+        self.mouseX = event.pos().x()
+        self.mouseY = event.pos().y()
+        self.lastButton = event.button()
+        self.shift = bool(event.modifiers() & Qt.ShiftModifier)
+        self.ctrl = bool(event.modifiers() & Qt.ControlModifier)
+        if event.type() == QEvent.MouseButtonPress and self.func:
+            self.func(self)
 
     def paintEvent(self, event):
         painter = QPainter(self)
@@ -462,9 +483,15 @@ class MapViewPanel(QWidget):
             self.mouseReleaseEvent = self.OnEdit
         elif edit:
             self.setMouseTracking(True)
-            self.mousePressEvent = func
-            self.mouseMoveEvent = func
-            self.mouseReleaseEvent = func
+            self.func = func
+            self.mouseX = 0
+            self.mouseY = 0
+            self.lastButton = Qt.NoButton
+            self.shift = False
+            self.ctrl = False
+            self.mousePressEvent = self._onEditMouse
+            self.mouseMoveEvent = self._onEditMouse
+            self.mouseReleaseEvent = self._onEditMouse
         else:
             self.mousePressEvent = func
 
@@ -493,11 +520,20 @@ class MapViewPanel(QWidget):
             self.blockBMPs[i] = QPixmap.fromImage(image)
         self.update()
 
+    def _onEditMouse(self, event):
+        self.mouseX = event.pos().x()
+        self.mouseY = event.pos().y()
+        self.lastButton = event.button()
+        self.shift = bool(event.modifiers() & Qt.ShiftModifier)
+        self.ctrl = bool(event.modifiers() & Qt.ControlModifier)
+        if event.type() == QEvent.MouseButtonPress and self.func:
+            self.func(self)
+
     def paintEvent(self, event):
         painter = QPainter(self)
         s = self.scale
-        w = self.width()
-        h = self.height()
+        w = self.size().width()
+        h = self.size().height()
         blockW = int(24 * s)
         blockH = int(24 * s)
 
