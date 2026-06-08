@@ -41,12 +41,51 @@ redo = []
 undo = []
 
 class LayoutTree(QTreeWidget):
+    
     def __init__(self, parent=None, id=None):
         super().__init__(parent)
         self.setHeaderHidden(True)
         self.setMinimumWidth(200)
         self._init_structure()
-        self.expandAll()
+        # раскрываем только корень и Resources
+        self.collapseAll()
+        root = self.topLevelItem(0)
+        if root:
+            self.expandItem(root)
+            for i in range(root.childCount()):
+                child = root.child(i)
+                if child.text(0) == "Resources":
+                    self.expandItem(child)
+                    break
+
+        self.setStyleSheet("""
+            QTreeWidget {
+                font-size: 11pt;
+                font-family: "Segoe UI";
+                background: #f0f0f0;
+                border: 1px solid #ccc;
+                padding: 4px;
+            }
+            QTreeWidget::item {
+                padding: 6px 2px;
+                border-bottom: 1px solid #e0e0e0;
+            }
+            QTreeWidget::item:has-children {
+                font-weight: bold;
+                color: #2c3e50;
+            }
+            QTreeWidget::item:!has-children {
+                font-weight: normal;
+                color: #34495e;
+            }
+            QTreeWidget::item:hover {
+                background: #d0e4f7;
+            }
+            QTreeWidget::item:selected {
+                background: #3498db;
+                color: white;
+            }
+        """)
 
     def _init_structure(self):
         root = QTreeWidgetItem(self, ["Editable Content"])
