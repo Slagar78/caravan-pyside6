@@ -70,7 +70,7 @@ class PortraitPanel(rompanel.ROMPanel):
 
         # Центральная часть: спрайт
         sbs4mid = QVBoxLayout()
-        text2 = QLabel("Sprite (Color 0 = trans)")
+        text2 = QLabel("Sprite (Color 0 = transparent)")
         self.editPanel = rompanel.SpritePanel(sbs4_widget, None, 64, 64, self.palette, scale=3, bg=16)
         sbs4mid.addWidget(text2, 0, Qt.AlignCenter)
         sbs4mid.addWidget(self.editPanel, 0, Qt.AlignCenter)
