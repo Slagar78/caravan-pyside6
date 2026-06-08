@@ -1,13 +1,14 @@
 import binascii
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel,
-    QPushButton, QComboBox, QFileDialog, QMessageBox
+    QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QGroupBox,
+    QLabel, QPushButton, QComboBox, QSlider, QFileDialog, QMessageBox, QDialog
 )
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QPixmap, QImage, QColor
 import data
 from PIL import Image
 import rompanel
+import shiboken6
 
 h2i = lambda i: int(i, 16)
 
@@ -16,30 +17,38 @@ class SpellAnimationPanel(rompanel.ROMPanel):
     frameTitle = "Spell Animation Editor"
 
     def init(self):
-
         self.palette = self.rom.getDataByName("palettes", "Sprite & UI Palette")
-        self.side = 0
-        self.frame = 0
         self.mode = 0
-
         self.color_left = 0
         self.color_right = 0
-
         self.curFrameIdx = 0
         self.curPaletteIdx = 0
 
-        leftSizer = QVBoxLayout()
+        # ---------- Выбор анимации ----------
+        spell_label = QLabel("Spell Animation:")
+        self.spellAnimList = QComboBox()
+        self.spellAnimList.addItems([sa.name for sa in self.rom.data["spell_animations"]])
+        self.spellAnimList.setCurrentIndex(0)
 
-        # sbs4 – Edit section
-        sbs4 = QVBoxLayout()
-        sbs4_widget = QWidget()
-        sbs4_widget.setLayout(sbs4)
-        sbs4_widget.setStyleSheet("border: 1px solid black;")
+        # ---------- Группы ----------
+        sbs3 = QGroupBox("Palette and Frame")
+        sbs3_layout = QVBoxLayout(sbs3)
+
+        sbs4 = QGroupBox("Edit")
+        sbs4_layout = QHBoxLayout(sbs4)
+
+        self.frameList = QComboBox()
+        self.frameList.setFixedWidth(100)
+        self.paletteList = QComboBox()
+        self.paletteList.setFixedWidth(100)
+
+        sbs3_layout.addWidget(self.frameList, 0, Qt.AlignLeft)
+        sbs3_layout.addWidget(self.paletteList, 0, Qt.AlignLeft)
 
         text1 = QLabel("Colors")
-        text2 = QLabel("Sprite (Color 0 = trans)")
+        text2 = QLabel("Sprite (Color 0 = transparent)")
 
-        self.editPanel = rompanel.SpritePanel(self, None, 16*8, 16*8, self.palette, scale=3, bg=16)
+        self.editPanel = rompanel.SpritePanel(self, None, 16*8, 16*8, self.palette, scale=2, bg=16, func="edit")
 
         self.colorPanels = []
         for p in range(16):
@@ -52,6 +61,7 @@ class SpellAnimationPanel(rompanel.ROMPanel):
         self.exportButton = QPushButton("Export")
         self.exportButton.setFixedSize(40, 20)
 
+        # Левая часть (цвета + кнопки)
         sbs4left = QVBoxLayout()
         colorSizer = QGridLayout()
         for i, cp in enumerate(self.colorPanels):
@@ -62,25 +72,44 @@ class SpellAnimationPanel(rompanel.ROMPanel):
         sbs4left.addWidget(self.importButton, 0, Qt.AlignCenter)
         sbs4left.addWidget(self.exportButton, 0, Qt.AlignCenter)
 
+        # Центр (спрайт)
         sbs4mid = QVBoxLayout()
         sbs4mid.addWidget(text2, 0, Qt.AlignCenter)
         sbs4mid.addWidget(self.editPanel, 0, Qt.AlignCenter)
 
-        sbs4.addLayout(sbs4left, 0)
-        sbs4.addLayout(sbs4mid, 1)
+        sbs4_layout.addLayout(sbs4left, 0)
+        sbs4_layout.addLayout(sbs4mid, 1)
 
-        midSizer = QHBoxLayout()
-        midSizer.addLayout(sbs4)
+        # ---------- Компоновка ----------
+        topSizer = QHBoxLayout()
+        topLeftSizer = QVBoxLayout()
+        topLeftSizer.addWidget(spell_label)
+        topLeftSizer.addWidget(self.spellAnimList)
+        topLeftSizer.addWidget(sbs3)
 
-        self.sizer.addLayout(midSizer, 0, 0, 1, 2)
+        topSizer.addLayout(topLeftSizer)
+        topSizer.addWidget(sbs4, 1)   # добавляем виджет целиком, а не его лейаут
+
+        self.sizer.addLayout(topSizer, 0, 0, 1, 2)
+
+        # Таймер анимации (как в оригинале)
+        self.animFrame = 0
+        self.animCur = 0
+        self.animDelays = [250, 150, 50, 50, 50, 50]
+        self.timer = QTimer(self)
+        self.timer.timeout.connect(self.TimerTest)
+        self.timer.start(self.animDelays[0])
 
         self.changeSpellAnim(0)
 
+        # Сигналы
+        self.spellAnimList.currentIndexChanged.connect(self.OnSelectSpellAnim)
+        self.paletteList.currentIndexChanged.connect(self.OnSelectPalette)
+        self.frameList.currentIndexChanged.connect(self.OnSelectFrame)
         self.importButton.clicked.connect(self.OnImportImage)
         self.exportButton.clicked.connect(self.OnExportImage)
 
-        self.printed = False
-
+    # ========== Методы оригинала ==========
     def printrb(self):
         rb = self.curFrame.raw_bytes.split("\n")
         hx = self.curFrame.hexlify().split("\n")
@@ -88,15 +117,17 @@ class SpellAnimationPanel(rompanel.ROMPanel):
             line1 = rb[i] if i < len(rb) else "No line"
             line2 = hx[i] if i < len(hx) else "No line"
             if line1 and line2:
-                print(["Different!!!", "Same"][line1 == line2])
+                print("Different!!!" if line1 != line2 else "Same")
             print(line1)
             print(line2)
             print()
 
     def OnImportImage(self):
-        size = self.editPanel.bmp.GetSize()
-        width, height = size.width(), size.height()
-        dlg = QFileDialog(self, f"Import 16-color {width}x{height} GIF", "", "GIF files (*.gif)")
+        if not shiboken6.isValid(self.editPanel):
+            return
+        size = self.editPanel.bmp.size()
+        w, h = size.width(), size.height()
+        dlg = QFileDialog(self, f"Import 16-color {w}x{h} GIF", "", "GIF files (*.gif)")
         dlg.setFileMode(QFileDialog.ExistingFile)
         if dlg.exec() == QDialog.Accepted:
             fn = dlg.selectedFiles()[0]
@@ -104,14 +135,10 @@ class SpellAnimationPanel(rompanel.ROMPanel):
                 img = Image.open(fn)
                 imgw, imgh = img.size
                 imgpal = img.getpalette()
-                if img.size != (width, height):
-                    QMessageBox.warning(self,
-                                        f"{fn} is {imgw}x{imgh} and should be {width}x{height}.",
-                                        self.parent.baseTitle + " -- Error")
+                if img.size != (w, h):
+                    QMessageBox.warning(self, f"{fn} is {imgw}x{imgh} and should be {w}x{h}.", self.parent.baseTitle + " -- Error")
                 elif img.format != "GIF" or imgpal is None:
-                    QMessageBox.warning(self,
-                                        f"{fn} is not a GIF or is improperly formatted.",
-                                        self.parent.baseTitle + " -- Error")
+                    QMessageBox.warning(self, f"{fn} is not a GIF or is improperly formatted.", self.parent.baseTitle + " -- Error")
                 else:
                     cols = ["#%02x%02x%02x" % (imgpal[i]//16*17, imgpal[i+1]//16*17, imgpal[i+2]//16*17) for i in range(0, 48, 3)]
                     pal = data.Palette()
@@ -121,7 +148,7 @@ class SpellAnimationPanel(rompanel.ROMPanel):
                     self.spellAnim.palette = pal
                     imgdata = list(img.getdata())
                     pixels = "".join(["%x" % d for d in imgdata])
-                    pixels = [pixels[i:i+width] for i in range(0, width*height, width)]
+                    pixels = [pixels[i:i+w] for i in range(0, w*h, w)]
                     self.curFrame.convertFromPixelRows(pixels)
                     newtiles = [None]*len(self.curFrame.tiles)
                     order = self.curFrame.getTileOrder(imgw//8, imgh//8)
@@ -133,37 +160,45 @@ class SpellAnimationPanel(rompanel.ROMPanel):
                     self.modify()
                 del img
             except IOError:
-                QMessageBox.warning(self,
-                                    f"{fn} is not a GIF or is improperly formatted.",
-                                    self.parent.baseTitle + " -- Error")
+                QMessageBox.warning(self, f"{fn} is not a GIF or is improperly formatted.", self.parent.baseTitle + " -- Error")
 
     def OnExportImage(self):
-        size = self.editPanel.bmp.GetSize()
-        width, height = size.width(), size.height()
-        dlg = QFileDialog(self, f"Export 16-color {width}x{height} GIF", "", "GIF files (*.gif)")
+        if not shiboken6.isValid(self.editPanel):
+            return
+        size = self.editPanel.bmp.size()
+        w, h = size.width(), size.height()
+        dlg = QFileDialog(self, f"Export 16-color {w}x{h} GIF", "", "GIF files (*.gif)")
         dlg.setAcceptMode(QFileDialog.AcceptSave)
         if dlg.exec() == QDialog.Accepted:
             fn = dlg.selectedFiles()[0]
-            img = Image.new("P", (width, height))
+            img = Image.new("P", (w, h))
             img.putdata([int(a, 16) for pr in self.editPanel.pixels for a in pr])
             p = [v for rt in self.editPanel.palette.rgbaTuples() for v in rt[:3]]
             p += [0] * (768 - len(p))
             img.putpalette(p)
             img.save(fn, "GIF")
 
-    def OnShow(self):
-        for p in range(16):
-            self.colorPanels[p].setStyleSheet(f"background-color: {self.palette.colors[p]};")
-            self.colorPanels[p].update()
-
     def TimerTest(self):
         self.animFrame ^= 1
+
+    def OnShow(self):
+        for p in range(16):
+            if p < len(self.colorPanels):
+                cp = self.colorPanels[p]
+                if shiboken6.isValid(cp):
+                    cp.setStyleSheet(f"background-color: {self.palette.colors[p]};")
+                    cp.update()
 
     def changeColors(self):
         palette = self.palette
         for c in range(len(self.colorPanels)):
-            self.colorPanels[c].setStyleSheet(f"background-color: {palette.colors[c]};")
-            self.colorPanels[c].update()
+            cp = self.colorPanels[c]
+            if shiboken6.isValid(cp):
+                cp.setStyleSheet(f"background-color: {palette.colors[c]};")
+                cp.update()
+        if shiboken6.isValid(self.editPanel):
+            self.editPanel.palette = palette
+            self.editPanel.update()
 
     def OnSelectPalette(self, idx):
         self.curPaletteIdx = idx
@@ -178,61 +213,67 @@ class SpellAnimationPanel(rompanel.ROMPanel):
             self.color_left = num
         else:
             self.color_right = num
-        # button = [self.selectedColorLeft, self.selectedColorRight][button]
-        # button.color = num
-        # button.SetBackgroundColour(self.palette.colors[num])
-        # button.Refresh()
 
     def refreshPixels(self):
-        pass
-
-    def OnChangeAnim(self, button_id):
-        # logic not fully implemented
-        pass
-
-    def OnSelectMode(self, mode_id):
         pass
 
     def OnSelectSpellAnim(self, idx):
         self.changeSpellAnim(idx)
 
-    def OnSwitchFrame(self):
-        self.frame ^= 1
-        self.changeSpellAnim(self.spellAnimList.GetSelection())
-
     def changeSpellAnim(self, num=None):
         if num is not None:
             if not self.rom.data["spell_animations"][num].loaded:
                 self.rom.getSpellAnimations(num, num)
+            self.spellAnim = self.rom.data["spell_animations"][num]
             self.curPaletteIdx = 0
             self.curFrameIdx = 0
-            self.spellAnim = self.rom.data["spell_animations"][num]
+            self.frameList.clear()
+            self.frameList.addItems(["Frame %i" % i for i in range(1)])
+            self.frameList.setCurrentIndex(0)
+            self.paletteList.clear()
+            self.paletteList.addItems(["Palette %i" % i for i in range(1)])
+            self.paletteList.setCurrentIndex(0)
+
+        if not hasattr(self, 'spellAnim') or self.spellAnim is None:
+            return
 
         self.palette = self.curPalette
-        self.editPanel.palette = self.palette
+        if shiboken6.isValid(self.editPanel):
+            self.editPanel.palette = self.palette
         self.changeColors()
 
-        pixels = []
+        frame = self.spellAnim.frame
+        if not frame or not frame.tiles:
+            return
+
+        # При необходимости дополняем тайлы до нужного количества (16×16 = 256)
         tw = self.editPanel.width // 8
         th = self.editPanel.height // 8
-        order = self.curFrame.getTileOrder(tw, th)
-        tiles = [self.curFrame.tiles[t] for t in order]
+        total_needed = tw * th
+        while len(frame.tiles) < total_needed:
+            empty_tile = data.Tile("Empty")
+            empty_tile.init(["0" * 8 for _ in range(8)])
+            frame.tiles.append(empty_tile)
 
+        order = frame.getTileOrder(tw, th)
+        tiles = [frame.tiles[t] for t in order]
+
+        pixels = []
         for tRow in range(th):
             for pRow in range(8):
-                row = "".join([tiles[tRow*tw+to].pixels[pRow] for to in range(tw) if tRow*tw+to < len(tiles)])
-                row += "0" * (tw*8 - len(row))
+                row = "".join([tiles[tRow*tw+to].pixels[pRow] for to in range(tw)])
                 pixels.append(row)
-        self.editPanel.refreshSprite(pixels, force=True)
 
-        self.updateModifiedIndicator(self.spellAnim.modified)
-        self.editPanel.update()
+        if shiboken6.isValid(self.editPanel):
+            self.editPanel.refreshSprite(pixels, force=True)
+            self.updateModifiedIndicator(self.spellAnim.modified)
+            self.editPanel.update()
         self.refreshPixels()
 
     def changeAnim(self, num):
         self.animCur = num
-        # self.timer.Start(self.animDelays[num])
-
+        self.timer.start(self.animDelays[num])
+        
     def getCurrentSpriteObject(self):
         return self.spellAnim
 

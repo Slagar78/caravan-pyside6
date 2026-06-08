@@ -15,7 +15,7 @@ h2i = lambda i: int(i, 16)
 
 class BattleSpritePanel(rompanel.ROMPanel):
     frameTitle = "Battle Sprite Editor"
-    canMaximize = True          # ← теперь окно можно растягивать
+    canMaximize = True
 
     def init(self):
         self.palette = self.rom.getDataByName("palettes", "Sprite & UI Palette")
@@ -108,7 +108,7 @@ class BattleSpritePanel(rompanel.ROMPanel):
         sbs4left.setContentsMargins(4, 4, 4, 4)
         sbs4left.setSpacing(6)
 
-        # ---------- Палитра (современный вид) ----------
+        # ---------- Палитра ----------
         leftCol = QVBoxLayout()
         leftCol.setSpacing(3)
         for i in range(0, 8):
