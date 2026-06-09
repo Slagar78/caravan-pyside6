@@ -271,11 +271,13 @@ class MainFrame(window.CaravanParentFrame):
             self.dirname = os.path.dirname(dlg.selectedFiles()[0])
             fn = pathjoin(self.dirname, self.filename)
 
-            with open(fn, 'rb') as file:
-                file.seek(0x150)
-                verify = file.read(15).decode('ascii')
+            # Открываем файл и проверяем сигнатуру (как в оригинале)
+            file = open(fn, 'rb')
+            file.seek(0x150)
+            verify = file.read(15).decode('ascii')
 
             if verify != "SHINING FORCE 2":
+                file.close()
                 QMessageBox.warning(self, self.baseTitle, "The file you selected is not a valid Shining Force 2 ROM in .BIN format.")
                 continue
 
@@ -310,29 +312,47 @@ class MainFrame(window.CaravanParentFrame):
             # Проверка на 2MB ROM
             romSize = os.path.getsize(fn)
             if romSize == 0x200000:
+                # Предупреждение
                 warn = QMessageBox(self)
                 warn.setWindowTitle(self.baseTitle)
-                warn.setText("You have opened a 2MB SF2 ROM. Create a 4MB expanded ROM now?")
+                warn.setText("You have opened a 2MB SF2 ROM.\n\n"
+                             "This version of the Caravan only edits a 4MB expanded SF2 ROM. "
+                             "Create the 4MB expanded ROM now?")
                 warn.setIcon(QMessageBox.Warning)
                 warn.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
                 if warn.exec() != QMessageBox.Yes:
+                    file.close()
                     return
 
+                # Запрос места сохранения
+                QMessageBox.information(self, self.baseTitle,
+                                        "Please select a location to save the expanded ROM.")
                 saveDlg = QFileDialog(self, "Save Shining Force 2 ROM (.BIN) As", "", "*.bin")
                 saveDlg.setAcceptMode(QFileDialog.AcceptSave)
-                if saveDlg.exec() != QDialog.Accepted:
+                if saveDlg.exec() == QDialog.Accepted:
+                    path = saveDlg.selectedFiles()[0]
+                else:
+                    file.close()
                     return
-                path = saveDlg.selectedFiles()[0]
 
-                QMessageBox.information(self, self.baseTitle, "Creating 4MB expanded ROM. This may take a while...")
-                with open(fn, 'rb') as file:
-                    r = rom.ROM(file)
+                QMessageBox.information(self, self.baseTitle,
+                                        "Creating 4MB expanded ROM. This may take a while...")
+
+                # Перемотка на начало и расширение на том же открытом файле
+                file.seek(0)
+                r = rom.ROM(file)
                 r.expandROM(path)
-                QMessageBox.information(self, self.baseTitle, "4MB ROM created. Now open it for editing.")
-                self.initNewProject(path)   # здесь datafile не передаётся, будет None
+
+                QMessageBox.information(self, self.baseTitle,
+                                        "4MB ROM created. Now open it for editing.")
+                # Закрываем старый файл, открываем новый (расширенный)
+                file.close()
+                self.initNewProject(path)
                 return
             else:
+                # 4MB ROM – просто загружаем
                 self.initNewProject(fn, datafile)
+                file.close()
             break
 
         dlg.deleteLater()

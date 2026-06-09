@@ -235,10 +235,15 @@ class SpritePanel(rompanel.ROMPanel):
                 self.sprite.raw_pixels = raw_str
                 self.sprite.pixels = pixel_rows
             else:
+                # Инициализируем второй кадр, если его нет
+                if not hasattr(self.sprite, 'raw_pixels2') or self.sprite.raw_pixels2 is None:
+                    self.sprite.raw_pixels2 = ""
+                if not hasattr(self.sprite, 'pixels2') or self.sprite.pixels2 is None:
+                    self.sprite.pixels2 = []
                 self.sprite.raw_pixels2 = raw_str
                 self.sprite.pixels2 = pixel_rows
 
-            self.changeSprite()        # важно
+            self.changeSprite()
             self.modify()
 
         except Exception as e:
@@ -331,12 +336,25 @@ class SpritePanel(rompanel.ROMPanel):
         if not self.sprite or not shiboken6.isValid(self.editPanel):
             return
 
-        # ФИКС ВТОРОГО КАДРА (особенно для Down)
-        if not hasattr(self.sprite, 'raw_pixels2') or self.sprite.raw_pixels2 is None or len(str(self.sprite.raw_pixels2)) == 0:
-            self.sprite.raw_pixels2 = self.sprite.raw_pixels[:] if hasattr(self.sprite, 'raw_pixels') else "0" * (self.sprite.width * self.sprite.height)
+        # --- raw_pixels2 (всегда строка!) ---
+        if not hasattr(self.sprite, 'raw_pixels2') or self.sprite.raw_pixels2 is None or (
+            isinstance(self.sprite.raw_pixels2, str) and len(self.sprite.raw_pixels2) == 0
+        ):
+            src = getattr(self.sprite, 'raw_pixels', None)
+            if src is not None:
+                # ПРИНУДИТЕЛЬНО ПРЕВРАЩАЕМ В СТРОКУ, даже если src – список
+                if isinstance(src, list):
+                    src = "".join(src)
+                self.sprite.raw_pixels2 = src
+            else:
+                self.sprite.raw_pixels2 = "0" * (self.sprite.width * self.sprite.height)
 
+        # --- pixels2 (список строк) ---
         if not hasattr(self.sprite, 'pixels2') or self.sprite.pixels2 is None or len(self.sprite.pixels2) == 0:
-            self.sprite.pixels2 = [row[:] for row in self.sprite.pixels] if hasattr(self.sprite, 'pixels') else ["0"*self.sprite.width for _ in range(self.sprite.height)]
+            if hasattr(self.sprite, 'pixels') and self.sprite.pixels:
+                self.sprite.pixels2 = [row[:] for row in self.sprite.pixels]
+            else:
+                self.sprite.pixels2 = ["0" * self.sprite.width for _ in range(self.sprite.height)]
 
         # Показываем нужный кадр
         if self.frame == 0 or not getattr(self.sprite, 'pixels2', None):

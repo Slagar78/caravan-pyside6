@@ -456,12 +456,12 @@ class SpritePanel(QWidget):
                             return
 
                         modified = False
-                        if parent.mode == 0:  # Пиксель
+                        if parent.mode == 0:
                             col = hex(color1 if event.buttons() & Qt.LeftButton else color2)[2:]
                             if self.pixels[y][x] != col:
                                 self.pixels[y] = self.pixels[y][:x] + col + self.pixels[y][x+1:]
                                 modified = True
-                        elif parent.mode == 1:  # Заливка
+                        elif parent.mode == 1:
                             col = hex(color1 if event.buttons() & Qt.LeftButton else color2)[2:]
                             target = self.pixels[y][x]
                             queue = [(x, y)]
@@ -479,7 +479,7 @@ class SpritePanel(QWidget):
                                 self.pixels[cy] = self.pixels[cy][:cx] + col + self.pixels[cy][cx+1:]
                                 queue.extend([(cx - 1, cy), (cx + 1, cy), (cx, cy - 1), (cx, cy + 1)])
                             modified = True
-                        elif parent.mode == 2:  # Замена
+                        elif parent.mode == 2:
                             col = hex(color1 if event.buttons() & Qt.LeftButton else color2)[2:]
                             repl = self.pixels[y][x]
                             if repl != col:
@@ -524,10 +524,11 @@ class SpritePanel(QWidget):
                         parent.modify()
                         raw = spr.convertFromPixelRows(self.pixels) if hasattr(spr, 'convertFromPixelRows') else None
                         if raw is not None:
+                            raw_str = "".join(raw) if isinstance(raw, list) else raw
                             if not hasattr(parent, 'frame') or parent.frame == 0:
-                                spr.raw_pixels = raw
+                                spr.raw_pixels = raw_str
                             else:
-                                spr.raw_pixels2 = raw
+                                spr.raw_pixels2 = raw_str
                         self.refreshSprite()
                         self.update()
                         parent.refreshPixels()
@@ -551,10 +552,11 @@ class SpritePanel(QWidget):
                     parent.modify()
                     raw = spr.convertFromPixelRows(self.pixels) if hasattr(spr, 'convertFromPixelRows') else None
                     if raw is not None:
+                        raw_str = "".join(raw) if isinstance(raw, list) else raw
                         if not hasattr(parent, 'frame') or parent.frame == 0:
-                            spr.raw_pixels = raw
+                            spr.raw_pixels = raw_str
                         else:
-                            spr.raw_pixels2 = raw
+                            spr.raw_pixels2 = raw_str
                     self.refreshSprite()
                     self.update()
                     parent.refreshPixels()
@@ -567,9 +569,15 @@ class SpritePanel(QWidget):
                         parent.modify()
                         frame = 0 if not hasattr(parent, 'frame') or parent.frame == 0 else 1
                         if frame == 0:
-                            spr.raw_pixels = spr.raw_pixels.replace(repl, col)
+                            if isinstance(spr.raw_pixels, list):
+                                spr.raw_pixels = "".join(spr.raw_pixels).replace(repl, col)
+                            else:
+                                spr.raw_pixels = spr.raw_pixels.replace(repl, col)
                         else:
-                            spr.raw_pixels2 = spr.raw_pixels2.replace(repl, col)
+                            if isinstance(spr.raw_pixels2, list):
+                                spr.raw_pixels2 = "".join(spr.raw_pixels2).replace(repl, col)
+                            else:
+                                spr.raw_pixels2 = spr.raw_pixels2.replace(repl, col)
                         self.refreshSprite()
                         self.update()
                         parent.refreshPixels()

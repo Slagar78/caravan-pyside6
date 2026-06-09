@@ -507,8 +507,9 @@ class Sprite(DataObject):
         self.height = height
         self.pixels = pixels
         self.pixels2 = pixels2
-        self.raw_pixels = pixels
-        self.raw_pixels2 = pixels2
+        # ВАЖНО: raw_pixels всегда строка, даже если pixels пуст
+        self.raw_pixels = ""
+        self.raw_pixels2 = ""
         self.commands = {}
         self.compressed = True
 
