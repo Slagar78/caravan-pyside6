@@ -52,6 +52,8 @@ class DialoguePanel(rompanel.ROMPanel):
         # Connect signals
         self.lineList.currentRowChanged.connect(self.OnSelectLine)
         self.editBox.textChanged.connect(self.OnEditText)
+        
+        self.changeBank(0)
 
     def OnSelectBank(self, idx):
         self.changeBank(idx)
