@@ -507,7 +507,7 @@ class Sprite(DataObject):
         self.height = height
         self.pixels = pixels
         self.pixels2 = pixels2
-        # ВАЖНО: raw_pixels всегда строка, даже если pixels пуст
+        self.has_second_frame = False
         self.raw_pixels = ""
         self.raw_pixels2 = ""
         self.commands = {}
@@ -556,18 +556,7 @@ class Sprite(DataObject):
         return pixels
 
     def hexlify(self, debug=False, **kwargs):
-        # ФИКС ДЛЯ ВТОРОГО КАДРА
-        if not hasattr(self, 'raw_pixels') or self.raw_pixels is None:
-            self.raw_pixels = ""
-        if not hasattr(self, 'raw_pixels2') or self.raw_pixels2 is None:
-            self.raw_pixels2 = ""
-
-        # Правильно соединяем оба кадра
-        frame1 = "".join(self.raw_pixels) if isinstance(self.raw_pixels, list) else self.raw_pixels
-        frame2 = "".join(self.raw_pixels2) if isinstance(self.raw_pixels2, list) else self.raw_pixels2
-
-        pixels = frame1 + frame2
-
+        pixels = self.raw_pixels + self.raw_pixels2
         pixels = " ".join([pixels[i:i+4] for i in range(0, len(pixels), 4)]) + " xxxx "
         if pixels == " xxxx ":
             return "ffffffff"
@@ -581,7 +570,6 @@ class Sprite(DataObject):
         sub = 0
         ins = 0
         lastpos = 0
-        skip = False
 
         for pos in range(0, len(pixels), 5):
             lastcode = code[:]
@@ -640,8 +628,6 @@ class Sprite(DataObject):
                     short_pat = token * reverted
                     long_pat = token * reverted
                     sub = pos
-            else:
-                pass
 
             if len(barrel) >= 16:
                 extra = barrel[16:]

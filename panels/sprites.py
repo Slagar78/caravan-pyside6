@@ -205,47 +205,47 @@ class SpritePanel(rompanel.ROMPanel):
             return
         if self.editPanel.bmp is None:
             self.editPanel.refreshSprite(self.editPanel.pixels)
-
+       
         size = self.editPanel.bmp.size()
         w, h = size.width(), size.height()
-
+       
         dlg = QFileDialog(self, f"Import {w}x{h} PNG", "", "PNG files (*.png)")
         dlg.setFileMode(QFileDialog.ExistingFile)
+       
         if dlg.exec() != QDialog.Accepted:
             return
-
+           
         fn = dlg.selectedFiles()[0]
+       
         try:
             img = Image.open(fn)
             if img.mode != 'P':
                 img = img.convert('P', palette=Image.ADAPTIVE, colors=16)
-
+               
             if img.size != (w, h):
                 QMessageBox.warning(self, "Ошибка", f"Изображение должно быть {w}x{h}")
                 return
-
+               
             indexes = list(img.getdata())
             pixels_hex = "".join(f"{idx:x}" for idx in indexes)
             pixel_rows = [pixels_hex[i:i+w] for i in range(0, len(pixels_hex), w)]
-
+           
             raw = self.sprite.convertFromPixelRows(pixel_rows)
             raw_str = "".join(raw) if isinstance(raw, list) else raw or ""
-
+           
             if self.frame == 0:
                 self.sprite.raw_pixels = raw_str
                 self.sprite.pixels = pixel_rows
             else:
-                # Инициализируем второй кадр, если его нет
-                if not hasattr(self.sprite, 'raw_pixels2') or self.sprite.raw_pixels2 is None:
-                    self.sprite.raw_pixels2 = ""
-                if not hasattr(self.sprite, 'pixels2') or self.sprite.pixels2 is None:
-                    self.sprite.pixels2 = []
                 self.sprite.raw_pixels2 = raw_str
                 self.sprite.pixels2 = pixel_rows
-
+                self.sprite.has_second_frame = True
+            
+            print(f"[OK] Imported frame {self.frame} | raw2 len = {len(self.sprite.raw_pixels2)}")
+            
             self.changeSprite()
             self.modify()
-
+            
         except Exception as e:
             QMessageBox.critical(self, "Import Error", str(e))
 
@@ -329,49 +329,50 @@ class SpritePanel(rompanel.ROMPanel):
     def changeSprite(self, num=None):
         if num is not None:
             self.curSpriteIdx = num
-            if self.rom and "sprites" in self.rom.data and not self.rom.data["sprites"][num].loaded:
+            if (self.rom and "sprites" in self.rom.data and
+                not self.rom.data["sprites"][num].loaded):
                 self.rom.getSprites(num, num + 2)
+            
             self.sprite = self.rom.data["sprites"][num + self.side]
 
-        if not self.sprite or not shiboken6.isValid(self.editPanel):
+        if not self.sprite:
             return
 
-        # --- raw_pixels2 (всегда строка!) ---
-        if not hasattr(self.sprite, 'raw_pixels2') or self.sprite.raw_pixels2 is None or (
-            isinstance(self.sprite.raw_pixels2, str) and len(self.sprite.raw_pixels2) == 0
-        ):
-            src = getattr(self.sprite, 'raw_pixels', None)
-            if src is not None:
-                # ПРИНУДИТЕЛЬНО ПРЕВРАЩАЕМ В СТРОКУ, даже если src – список
-                if isinstance(src, list):
-                    src = "".join(src)
-                self.sprite.raw_pixels2 = src
-            else:
-                self.sprite.raw_pixels2 = "0" * (self.sprite.width * self.sprite.height)
+        # === КРИТИЧЕСКИ ВАЖНЫЙ БЛОК ===
+        if not hasattr(self.sprite, 'raw_pixels2') or self.sprite.raw_pixels2 is None or len(self.sprite.raw_pixels2) < 200:
+            self.sprite.raw_pixels2 = "0" * (24 * 24)
+            self.sprite.has_second_frame = False
 
-        # --- pixels2 (список строк) ---
-        if not hasattr(self.sprite, 'pixels2') or self.sprite.pixels2 is None or len(self.sprite.pixels2) == 0:
+        if not hasattr(self.sprite, 'pixels2') or not self.sprite.pixels2 or len(self.sprite.pixels2) == 0:
             if hasattr(self.sprite, 'pixels') and self.sprite.pixels:
                 self.sprite.pixels2 = [row[:] for row in self.sprite.pixels]
             else:
-                self.sprite.pixels2 = ["0" * self.sprite.width for _ in range(self.sprite.height)]
+                self.sprite.pixels2 = ["0" * 24 for _ in range(24)]
 
         # Показываем нужный кадр
-        if self.frame == 0 or not getattr(self.sprite, 'pixels2', None):
+        if self.frame == 0:
             self.editPanel.refreshSprite(self.sprite.pixels)
         else:
             self.editPanel.refreshSprite(self.sprite.pixels2)
 
-        self.updateModifiedIndicator(self.sprite.modified)
+        self.updateModifiedIndicator(getattr(self.sprite, 'modified', False))
         self.editPanel.update()
         self.refreshPixels()
 
+        self.protectSecondFrame()
+
+    def protectSecondFrame(self):
+        """Защита от случайного затирания второго кадра"""
+        if hasattr(self, 'sprite') and self.sprite and hasattr(self.sprite, 'raw_pixels2'):
+            if len(self.sprite.raw_pixels2) < 100:
+                print(f"[PROTECT] Восстановлен пустой raw_pixels2 для {self.sprite.name}")
+                self.sprite.raw_pixels2 = "0" * (24 * 24)
+                self.sprite.has_second_frame = False
 
     def changeAnimSprite(self):
         if not shiboken6.isValid(self.animPanel) or not self.sprite:
             return
 
-        # Простая и надёжная версия
         if self.animFrame == 0:
             pixels = getattr(self.sprite, 'pixels', [])
         else:
