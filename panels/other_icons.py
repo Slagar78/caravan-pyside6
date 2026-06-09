@@ -147,91 +147,75 @@ class OtherIconPanel(rompanel.ROMPanel):
     def OnImportImage(self):
         if not shiboken6.isValid(self.editPanel):
             return
-        dlg = QFileDialog(self, "Import 16x24 icon from GIF", "", "GIF files (*.gif)")
+        dlg = QFileDialog(self, "Import 16x24 icon from PNG", "", "PNG files (*.png)")
         dlg.setFileMode(QFileDialog.ExistingFile)
         if dlg.exec() != QDialog.Accepted:
             return
         fn = dlg.selectedFiles()[0]
         try:
             img = Image.open(fn)
-            w, h = img.size
-            if (w, h) != (16, 24):
-                QMessageBox.warning(self, "Error", f"Image must be 16x24 pixels. This one is {w}x{h}.")
+            if img.size != (16, 24):
+                QMessageBox.warning(self, "Error", f"Image must be 16x24 pixels. This one is {img.size[0]}x{img.size[1]}.")
                 return
 
-            # Эталонный «прозрачный» цвет из игровой палитры (индекс 0)
-            base_transparent = self.palette.colors[0]
-            tr = int(base_transparent[1:3], 16)
-            tg = int(base_transparent[3:5], 16)
-            tb = int(base_transparent[5:7], 16)
+            # Фиксированная игровая палитра (индекс 0 – прозрачный)
+            game_palette = []
+            for i in range(16):
+                c = self.palette.colors[i]
+                game_palette.append((int(c[1:3],16), int(c[3:5],16), int(c[5:7],16)))
 
-            # Игровая палитра (индекс 0 = прозрачный, 1..15 – остальные цвета)
-            game_pal = [(tr, tg, tb)]
-            for i in range(1, 16):
-                cstr = self.palette.colors[i]
-                game_pal.append((int(cstr[1:3], 16), int(cstr[3:5], 16), int(cstr[5:7], 16)))
-
-            if img.mode == "P":
+            # Если PNG индексированный – работаем с его палитрой
+            if img.mode == 'P':
                 pal = img.getpalette()
-                transp = img.info.get('transparency', 0)
-                gif_pal = []
+                transp = img.info.get('transparency', None)
+                # Строим маппинг: индекс PNG -> индекс игры
+                mapping = []
                 for i in range(16):
-                    if pal and i*3+2 < len(pal):
-                        gif_pal.append((pal[i*3], pal[i*3+1], pal[i*3+2]))
-                    else:
-                        gif_pal.append((0,0,0))
-                # Маппинг индексов GIF → игровых
-                mapping = [0] * 16
-                mapping[transp] = 0
-                for i in range(16):
-                    if i == transp:
+                    if i == transp:          # прозрачный индекс в PNG
+                        mapping.append(0)
                         continue
-                    best_j = 1
+                    r, g, b = pal[i*3], pal[i*3+1], pal[i*3+2]
+                    # Ищем ближайший в игровой палитре (кроме индекса 0)
+                    best_idx = 1
                     best_dist = 999999
                     for j in range(1, 16):
-                        pr, pg, pb = gif_pal[i]
-                        gr, gg, gb = game_pal[j]
-                        dist = (pr-gr)**2 + (pg-gg)**2 + (pb-gb)**2
+                        gr, gg, gb = game_palette[j]
+                        dist = (r-gr)**2 + (g-gg)**2 + (b-gb)**2
                         if dist < best_dist:
                             best_dist = dist
-                            best_j = j
-                    mapping[i] = best_j
-
+                            best_idx = j
+                    mapping.append(best_idx)
                 raw = list(img.getdata())
                 new_indices = [mapping[idx] for idx in raw]
-                pixels = []
-                for y in range(24):
-                    row_data = new_indices[y*w:(y+1)*w]
-                    pixels.append("".join(["%x" % v for v in row_data]))
             else:
-                if img.mode != "RGB":
-                    img = img.convert("RGB")
+                # Не индексированный – конвертируем в RGBA, прозрачность по альфе
+                img = img.convert("RGBA")
                 raw = list(img.getdata())
                 new_indices = []
-                for px in raw:
-                    r, g, b = px[:3]
-                    dist_to_transp = (r-tr)**2 + (g-tg)**2 + (b-tb)**2
-                    if dist_to_transp < 500:
+                for r, g, b, a in raw:
+                    if a < 128:
                         new_indices.append(0)
-                    else:
-                        best_j = 1
-                        best_dist = 999999
-                        for j in range(1, 16):
-                            gr, gg, gb = game_pal[j]
-                            dist = (r-gr)**2 + (g-gg)**2 + (b-gb)**2
-                            if dist < best_dist:
-                                best_dist = dist
-                                best_j = j
-                        new_indices.append(best_j)
-                pixels = []
-                for y in range(24):
-                    row_data = new_indices[y*w:(y+1)*w]
-                    pixels.append("".join(["%x" % v for v in row_data]))
+                        continue
+                    best_idx = 1
+                    best_dist = 999999
+                    for j in range(1, 16):
+                        gr, gg, gb = game_palette[j]
+                        dist = (r-gr)**2 + (g-gg)**2 + (b-gb)**2
+                        if dist < best_dist:
+                            best_dist = dist
+                            best_idx = j
+                    new_indices.append(best_idx)
 
-            icon = self.curIcon
-            icon.pixels = pixels
-            icon.raw_pixels = "".join(pixels)
-            icon.modified = True
+            # Записываем пиксели в иконку (16×24)
+            w, h = 16, 24
+            pixels = []
+            for y in range(h):
+                row = new_indices[y*w:(y+1)*w]
+                pixels.append("".join(["%x" % v for v in row]))
+
+            self.curIcon.pixels = pixels
+            self.curIcon.raw_pixels = "".join(pixels)
+            self.curIcon.modified = True
 
             self.changeIcon(self.curIconIdx)
             self.changeColors()
@@ -242,32 +226,27 @@ class OtherIconPanel(rompanel.ROMPanel):
     def OnExportImage(self):
         if not shiboken6.isValid(self.editPanel):
             return
-        size = (16, 24)
-        dlg = QFileDialog(self, "Export icon as GIF", "", "GIF files (*.gif)")
+        dlg = QFileDialog(self, "Export icon as PNG", "", "PNG files (*.png)")
         dlg.setAcceptMode(QFileDialog.AcceptSave)
         if dlg.exec() != QDialog.Accepted:
             return
         fn = dlg.selectedFiles()[0]
         try:
-            img = Image.new("P", size)
+            w, h = 16, 24
+            img = Image.new("P", (w, h))
             flat = [int(a, 16) for pr in self.editPanel.pixels for a in pr]
             img.putdata(flat)
 
-            # Полная 16-цветная палитра (ровно 48 байт)
-            palette_colors = []
+            # Палитра из self.palette (16 цветов)
+            palette_bytes = []
             for i in range(16):
-                cstr = self.palette.colors[i]
-                r = int(cstr[1:3], 16)
-                g = int(cstr[3:5], 16)
-                b = int(cstr[5:7], 16)
-                palette_colors.extend([r, g, b])
-
-            # Дополняем до 768 байт (256 цветов)
-            palette_colors += [0] * (768 - len(palette_colors))
-            img.putpalette(palette_colors)
+                c = self.palette.colors[i]
+                palette_bytes.extend([int(c[1:3],16), int(c[3:5],16), int(c[5:7],16)])
+            palette_bytes += [0] * (768 - len(palette_bytes))
+            img.putpalette(palette_bytes)
 
             # Прозрачность для индекса 0
-            img.save(fn, "GIF", transparency=0)
+            img.save(fn, "PNG", transparency=0)
         except Exception as e:
             QMessageBox.critical(self, "Export Error", str(e))
 

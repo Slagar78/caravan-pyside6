@@ -363,14 +363,80 @@ class SpritePanel(QWidget):
                 if x < 0 or x >= self.width or y < 0 or y >= self.height:
                     return
 
-                if not hasattr(parent, 'battleSprite') or not hasattr(parent, 'curFrameIdx'):
-                    return
-                try:
-                    cur_frame = parent.battleSprite.frames[parent.curFrameIdx]
-                except (IndexError, AttributeError):
+                # ==== Батл-спрайты (есть battleSprite и curFrameIdx) ====
+                if hasattr(parent, 'battleSprite') and hasattr(parent, 'curFrameIdx'):
+                    try:
+                        cur_frame = parent.battleSprite.frames[parent.curFrameIdx]
+                    except (IndexError, AttributeError):
+                        return
+
+                    old_tiles = cur_frame.tiles[:] if hasattr(cur_frame, 'tiles') else None
+
+                    if event.modifiers() & Qt.ShiftModifier:
+                        col = int(self.pixels[y][x], 16)
+                        if event.buttons() & Qt.LeftButton:
+                            parent.color_left = col
+                        else:
+                            parent.color_right = col
+                        if hasattr(parent, 'selectedColorLeft'):
+                            parent.selectedColorLeft.color = col
+                            parent.selectedColorLeft.setStyleSheet(
+                                f"background-color: {parent.palette.colors[col]};")
+                        if hasattr(parent, 'selectedColorRight'):
+                            parent.selectedColorRight.color = col
+                            parent.selectedColorRight.setStyleSheet(
+                                f"background-color: {parent.palette.colors[col]};")
+                        return
+
+                    modified = False
+
+                    if parent.mode == 0:
+                        col = hex(color1 if event.buttons() & Qt.LeftButton else color2)[2:]
+                        if self.pixels[y][x] != col:
+                            self.pixels[y] = self.pixels[y][:x] + col + self.pixels[y][x+1:]
+                            modified = True
+                    elif parent.mode == 1:
+                        col = hex(color1 if event.buttons() & Qt.LeftButton else color2)[2:]
+                        target = self.pixels[y][x]
+                        queue = [(x, y)]
+                        visited = set()
+                        w, h = self.width, self.height
+                        while queue:
+                            cx, cy = queue.pop(0)
+                            if (cx, cy) in visited:
+                                continue
+                            if cx < 0 or cx >= w or cy < 0 or cy >= h:
+                                continue
+                            if self.pixels[cy][cx] != target:
+                                continue
+                            visited.add((cx, cy))
+                            self.pixels[cy] = self.pixels[cy][:cx] + col + self.pixels[cy][cx+1:]
+                            queue.extend([(cx - 1, cy), (cx + 1, cy), (cx, cy - 1), (cx, cy + 1)])
+                        modified = True
+                    elif parent.mode == 2:
+                        col = hex(color1 if event.buttons() & Qt.LeftButton else color2)[2:]
+                        repl = self.pixels[y][x]
+                        if repl != col:
+                            for i in range(len(self.pixels)):
+                                self.pixels[i] = self.pixels[i].replace(repl, col)
+                            modified = True
+
+                    if modified:
+                        self._updateFrameTiles(cur_frame)
+                        parent.modify()
+                        self.refreshSprite()
+                        self.update()
+                        parent.refreshPixels()
+
+                        new_tiles = cur_frame.tiles[:]
+                        if old_tiles != new_tiles:
+                            parent.commit([[old_tiles], [new_tiles]])
                     return
 
-                old_tiles = cur_frame.tiles[:] if hasattr(cur_frame, 'tiles') else None
+                # ==== Остальные панели (иконки, фоны, спелл-анимации) ====
+                spr = parent.getCurrentSpriteObject()
+                oldpix = spr.raw_pixels[:] if hasattr(spr, 'raw_pixels') else ""
+                oldpix2 = spr.raw_pixels2[:] if (hasattr(spr, 'raw_pixels2') and hasattr(parent, 'frame')) else ""
 
                 if event.modifiers() & Qt.ShiftModifier:
                     col = int(self.pixels[y][x], 16)
@@ -386,16 +452,21 @@ class SpritePanel(QWidget):
                         parent.selectedColorRight.color = col
                         parent.selectedColorRight.setStyleSheet(
                             f"background-color: {parent.palette.colors[col]};")
-                    return
-
-                modified = False
-
-                if parent.mode == 0:
+                elif parent.mode == 0:  # Пиксель
                     col = hex(color1 if event.buttons() & Qt.LeftButton else color2)[2:]
                     if self.pixels[y][x] != col:
                         self.pixels[y] = self.pixels[y][:x] + col + self.pixels[y][x+1:]
-                        modified = True
-                elif parent.mode == 1:
+                        parent.modify()
+                        raw = spr.convertFromPixelRows(self.pixels) if hasattr(spr, 'convertFromPixelRows') else None
+                        if raw is not None:
+                            if not hasattr(parent, 'frame') or parent.frame == 0:
+                                spr.raw_pixels = raw
+                            else:
+                                spr.raw_pixels2 = raw
+                        self.refreshSprite()
+                        self.update()
+                        parent.refreshPixels()
+                elif parent.mode == 1:  # Заливка
                     col = hex(color1 if event.buttons() & Qt.LeftButton else color2)[2:]
                     target = self.pixels[y][x]
                     queue = [(x, y)]
@@ -412,25 +483,38 @@ class SpritePanel(QWidget):
                         visited.add((cx, cy))
                         self.pixels[cy] = self.pixels[cy][:cx] + col + self.pixels[cy][cx+1:]
                         queue.extend([(cx - 1, cy), (cx + 1, cy), (cx, cy - 1), (cx, cy + 1)])
-                    modified = True
-                elif parent.mode == 2:
+                    parent.modify()
+                    raw = spr.convertFromPixelRows(self.pixels) if hasattr(spr, 'convertFromPixelRows') else None
+                    if raw is not None:
+                        if not hasattr(parent, 'frame') or parent.frame == 0:
+                            spr.raw_pixels = raw
+                        else:
+                            spr.raw_pixels2 = raw
+                    self.refreshSprite()
+                    self.update()
+                    parent.refreshPixels()
+                elif parent.mode == 2:  # Замена
                     col = hex(color1 if event.buttons() & Qt.LeftButton else color2)[2:]
                     repl = self.pixels[y][x]
                     if repl != col:
                         for i in range(len(self.pixels)):
                             self.pixels[i] = self.pixels[i].replace(repl, col)
-                        modified = True
+                        parent.modify()
+                        frame = 0 if not hasattr(parent, 'frame') or parent.frame == 0 else 1
+                        if frame == 0:
+                            spr.raw_pixels = spr.raw_pixels.replace(repl, col)
+                        else:
+                            spr.raw_pixels2 = spr.raw_pixels2.replace(repl, col)
+                        self.refreshSprite()
+                        self.update()
+                        parent.refreshPixels()
 
-                if modified:
-                    self._updateFrameTiles(cur_frame)
-                    parent.modify()
-                    self.refreshSprite()
-                    self.update()
-                    parent.refreshPixels()
-
-                    new_tiles = cur_frame.tiles[:]
-                    if old_tiles != new_tiles:
-                        parent.commit([[old_tiles], [new_tiles]])
+                if hasattr(spr, 'raw_pixels') and (oldpix != spr.raw_pixels or (hasattr(parent, 'frame') and oldpix2 != spr.raw_pixels2)):
+                    if not hasattr(parent, 'frame'):
+                        parent.commit([[oldpix], [spr.raw_pixels[:]]])
+                    else:
+                        parent.commit([[oldpix, oldpix2], [spr.raw_pixels[:], spr.raw_pixels2[:]]])
+                        
     def _updateFrameTiles(self, frame):
         w, h = self.width, self.height
         frame.convertFromPixelRows(self.pixels)
