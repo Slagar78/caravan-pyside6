@@ -329,27 +329,36 @@ class SpritePanel(rompanel.ROMPanel):
     def changeSprite(self, num=None):
         if num is not None:
             self.curSpriteIdx = num
-            if (self.rom and "sprites" in self.rom.data and
-                not self.rom.data["sprites"][num].loaded):
-                self.rom.getSprites(num, num + 2)
-            
+            if self.rom and "sprites" in self.rom.data:
+                if not self.rom.data["sprites"][num].loaded:
+                    self.rom.getSprites(num, num + 2)
             self.sprite = self.rom.data["sprites"][num + self.side]
 
         if not self.sprite:
             return
 
-        # === КРИТИЧЕСКИ ВАЖНЫЙ БЛОК ===
-        if not hasattr(self.sprite, 'raw_pixels2') or self.sprite.raw_pixels2 is None or len(self.sprite.raw_pixels2) < 200:
-            self.sprite.raw_pixels2 = "0" * (24 * 24)
+        # восстановление первого кадра, если повреждён
+        if hasattr(self.sprite, 'pixels') and self.sprite.pixels:
+            if len(self.sprite.raw_pixels) > 24 * 24:
+                raw = self.sprite.convertFromPixelRows(self.sprite.pixels)
+                self.sprite.raw_pixels = "".join(raw) if isinstance(raw, list) else raw
+                self.sprite.modified = True
+
+        # восстановление второго кадра (уже было)
+        if not hasattr(self.sprite, 'raw_pixels2') or self.sprite.raw_pixels2 is None:
+            self.sprite.raw_pixels2 = ""
             self.sprite.has_second_frame = False
+        if len(self.sprite.raw_pixels2) == 0 and hasattr(self.sprite, 'pixels2') and self.sprite.pixels2:
+            try:
+                raw = self.sprite.convertFromPixelRows(self.sprite.pixels2)
+                self.sprite.raw_pixels2 = "".join(raw) if isinstance(raw, list) else raw
+                self.sprite.has_second_frame = True
+                self.sprite.modified = True
+            except Exception as e:
+                print(f"Не удалось восстановить raw_pixels2: {e}")
+                self.sprite.raw_pixels2 = ""
+                self.sprite.has_second_frame = False
 
-        if not hasattr(self.sprite, 'pixels2') or not self.sprite.pixels2 or len(self.sprite.pixels2) == 0:
-            if hasattr(self.sprite, 'pixels') and self.sprite.pixels:
-                self.sprite.pixels2 = [row[:] for row in self.sprite.pixels]
-            else:
-                self.sprite.pixels2 = ["0" * 24 for _ in range(24)]
-
-        # Показываем нужный кадр
         if self.frame == 0:
             self.editPanel.refreshSprite(self.sprite.pixels)
         else:
@@ -358,16 +367,6 @@ class SpritePanel(rompanel.ROMPanel):
         self.updateModifiedIndicator(getattr(self.sprite, 'modified', False))
         self.editPanel.update()
         self.refreshPixels()
-
-        self.protectSecondFrame()
-
-    def protectSecondFrame(self):
-        """Защита от случайного затирания второго кадра"""
-        if hasattr(self, 'sprite') and self.sprite and hasattr(self.sprite, 'raw_pixels2'):
-            if len(self.sprite.raw_pixels2) < 100:
-                print(f"[PROTECT] Восстановлен пустой raw_pixels2 для {self.sprite.name}")
-                self.sprite.raw_pixels2 = "0" * (24 * 24)
-                self.sprite.has_second_frame = False
 
     def changeAnimSprite(self):
         if not shiboken6.isValid(self.animPanel) or not self.sprite:

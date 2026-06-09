@@ -1,0 +1,16 @@
+Traceback (most recent call last):
+  File "D:\Caravan_port\caravan-pyside6\caravan.py", line 529, in saveFile
+    result = next(gen)
+  File "D:\Caravan_port\caravan-pyside6\rom.py", line 2604, in writeAllData
+    result = next(gen)
+  File "D:\Caravan_port\caravan-pyside6\rom.py", line 2947, in writeSprites
+    datastr[i] = dataset[i].raw_hexlify(rom=self)
+                 ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^
+  File "D:\Caravan_port\caravan-pyside6\data.py", line 64, in raw_hexlify
+    all = self.hexlify(*args, **kwargs)
+  File "D:\Caravan_port\caravan-pyside6\data.py", line 573, in hexlify
+    frame1 = rows_to_bytes(self.pixels)
+  File "D:\Caravan_port\caravan-pyside6\data.py", line 568, in rows_to_bytes
+    high = int(row[x], 16)
+               ~~~^^^
+IndexError: string index out of range

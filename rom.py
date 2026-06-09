@@ -2009,7 +2009,6 @@ class ROM(object):
             bs.raw_bytes = raw_bytes
 
     def spriteSubroutine(self, sprite, source, addr=0):
-
         if type(addr) != type([]):
             pixels, raw_bytes = sprite.decompress(self, source, addr)
         else:
@@ -2021,23 +2020,8 @@ class ROM(object):
                 raw_bytes += r
 
         sprite.raw_bytes = raw_bytes
-
-        # print hex(addr)
-        # raw_input()
-
-        # for p in range(0, len(pixels), 8):
-        #     if not p%(64*12):
-        #         raw_input()
-        #     print pixels[p:p+8]
-        # raw_input()
-
-        # sprite.pixels = pixels
         sprite.rearrangePixels(pixels, sprite.__class__ is data.Sprite)
-
         sprite.loaded = True
-
-        # print "Successfully got sprite"
-
         return sprite
 
     def getMenuIcons(self, start, end):

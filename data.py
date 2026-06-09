@@ -556,110 +556,21 @@ class Sprite(DataObject):
         return pixels
 
     def hexlify(self, debug=False, **kwargs):
-        pixels = self.raw_pixels + self.raw_pixels2
-        pixels = " ".join([pixels[i:i+4] for i in range(0, len(pixels), 4)]) + " xxxx "
-        if pixels == " xxxx ":
-            return "ffffffff"
+        # Вспомогательная функция: переводит row-major пиксели (self.pixels) в column-major порядок тайлов, который ожидает компрессор и игра
+        def to_column_major(pixels_list):
+            w = self.width
+            h = self.height
+            result = []
+            for tx in range(0, w, 8):          # столбцы тайлов (0, 8, 16)
+                for ty in range(0, h, 8):      # строки тайлов внутри столбца (0, 8, 16)
+                    for y in range(ty, ty+8):
+                        row = pixels_list[y]
+                        result.append(row[tx:tx+8])
+            return "".join(result)
 
-        code = ""
-        barrel = ""
-        short_pat = ""
-        long_pat = ""
-        last_short = ""
-        last_long = ""
-        sub = 0
-        ins = 0
-        lastpos = 0
-
-        for pos in range(0, len(pixels), 5):
-            lastcode = code[:]
-            token = pixels[pos:pos+5]
-            long_pat += token
-            if not short_pat:
-                short_pat += token
-            temp_pat = (((len(long_pat) - len(short_pat)) // len(short_pat)) + 2) * short_pat
-            if temp_pat.find(long_pat) == -1:
-                short_pat = long_pat
-            found_short = pixels[:sub].rfind(short_pat)
-            found_long = pixels[:sub].rfind(long_pat)
-            dist_short = (sub - found_short)
-            dist_long = (sub - found_long)
-            does_repeat = (short_pat * ((sub - found_short) // len(short_pat) + 1)).find(pixels[found_short:sub]) == 0
-            possible_short = (found_short != -1) and (dist_short <= len(short_pat) or does_repeat)
-            possible_long = (found_long != -1)
-
-            if (not possible_short and not possible_long) or len(long_pat) > 33*5:
-                if len(long_pat) == 5:
-                    short_pat = ""
-                    long_pat = ""
-                    code += token
-                    barrel += "0"
-                    sub = pos+5
-                elif len(long_pat) == 10:
-                    code += long_pat[:5]
-                    barrel += "0"
-                    short_pat = token
-                    long_pat = token
-                    sub = pos
-                else:
-                    reverted = False
-                    if (not possible_short and not possible_long) or len(long_pat) > 33*5:
-                        reverted = True
-                        short_pat = last_short
-                        long_pat = last_long
-                        found_short = pixels[:sub].rfind(short_pat)
-                        found_long = pixels[:sub].rfind(long_pat)
-                        dist_short = (sub - found_short)
-                        dist_long = (sub - found_long)
-                        possible_short = (found_short != -1) and dist_short <= len(short_pat)
-                        possible_long = (found_long != -1)
-                    repeat = (len(long_pat) // 10) * 2
-                    repeat -= ((len(long_pat) // 5) + 1) % 2
-                    if possible_short:
-                        offset = (dist_short // 5 * 2) * 16
-                    elif possible_long:
-                        offset = (dist_long // 5 * 2) * 16
-                    else:
-                        pass
-                    repeat = 32 - repeat
-                    cmd = hex(offset + repeat)[2:].zfill(4)
-                    code += cmd + " "
-                    barrel += "1"
-                    short_pat = token * reverted
-                    long_pat = token * reverted
-                    sub = pos
-
-            if len(barrel) >= 16:
-                extra = barrel[16:]
-                barrel = "".join([hex(int(barrel[s:s+4], 2))[2:] for s in range(0,16,4)])
-                code = code[:ins] + barrel + ": " + code[ins:]
-                barrel = extra
-                ins += 86
-                code = code[:ins] + "\n" + code[ins:]
-                ins += 1
-
-            last_short = short_pat
-            last_long = long_pat
-            if lastcode != code:
-                lastpos = pos
-            QApplication.processEvents()
-
-        barrel += "1"
-        while len(barrel) < 16:
-            barrel += "0"
-        code += "0000"
-        code = code[:ins] + barrel + ": " + code[ins:]
-        barrel = extra if 'extra' in locals() else ""
-        ins += 86
-        code = code[:ins] + "\n" + code[ins:]
-        ins += 1
-        if len(barrel):
-            while len(barrel) < 16:
-                barrel += "0"
-            barrel = "".join([hex(int(barrel[s:s+4], 2))[2:] for s in range(0,16,4)])
-            code = code[:ins] + barrel + " " + code[ins:]
-
-        return code
+        pixels1 = to_column_major(self.pixels) if self.pixels else ""
+        pixels2 = to_column_major(self.pixels2) if self.pixels2 else ""
+        return compress.basic_compress_hex(pixels1 + pixels2)
 
 class MenuIcon(Sprite):
     namePattern = "Menu Icon %i"
