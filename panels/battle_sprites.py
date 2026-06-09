@@ -305,65 +305,79 @@ class BattleSpritePanel(rompanel.ROMPanel):
             return
         size = self.editPanel.bmp.size()
         w, h = size.width(), size.height()
-        dlg = QFileDialog(self, f"Import 16-color {w}x{h} GIF", "", "GIF files (*.gif)")
+        dlg = QFileDialog(self, f"Import {w}x{h} PNG (indexed, 16 colors)", "", "PNG files (*.png)")
         dlg.setFileMode(QFileDialog.ExistingFile)
         if dlg.exec() == QDialog.Accepted:
             fn = dlg.selectedFiles()[0]
             try:
                 img = Image.open(fn)
-                imgw, imgh = img.size
-                imgpal = img.getpalette()
-                if (imgw, imgh) != (w, h):
-                    QMessageBox.warning(self, f"{fn} is {imgw}x{imgh} and should be {w}x{h}.",
+                if img.mode != 'P':
+                    img = img.convert('P', palette=Image.ADAPTIVE, colors=16)
+                if img.mode != 'P':
+                    raise ValueError("Image is not indexed. Please save as 16-color PNG with palette.")
+                if img.size != (w, h):
+                    QMessageBox.warning(self, f"Image is {img.size[0]}x{img.size[1]}, need {w}x{h}.",
                                         self.parent.baseTitle + " -- Error")
-                elif img.format != "GIF" or imgpal is None:
-                    QMessageBox.warning(self, f"{fn} is not a GIF or is improperly formatted.",
-                                        self.parent.baseTitle + " -- Error")
-                else:
-                    cols = ["#%02x%02x%02x" % (imgpal[i]//16*17, imgpal[i+1]//16*17, imgpal[i+2]//16*17)
-                            for i in range(0, 48, 3)]
-                    pal = data.Palette()
-                    pal.init(cols)
-                    self.editPanel.palette = pal
-                    if shiboken6.isValid(self.animPanel):
-                        self.animPanel.palette = pal
-                    self.palette = pal
-                    self.battleSprite.palettes[self.curPaletteIdx] = pal
+                    return
 
-                    imgdata = list(img.getdata())
-                    pixels = "".join(["%x" % d for d in imgdata])
-                    pixels = [pixels[i:i+w] for i in range(0, w*h, w)]
-                    self.curFrame.convertFromPixelRows(pixels)
-                    newtiles = [None]*len(self.curFrame.tiles)
-                    order = self.curFrame.getTileOrder(imgw//8, imgh//8)
-                    for i in range(len(newtiles)):
-                        newtiles[order[i]] = self.curFrame.tiles[i]
-                    self.curFrame.tiles = newtiles
+                raw_palette = img.getpalette()
+                if raw_palette is None or len(raw_palette) < 48:
+                    raw_palette = list(raw_palette or [])
+                    raw_palette += [0] * (48 - len(raw_palette))
 
-                    self.changeBattleSprite()
-                    self.updateAnimFrames()
-                    self.changeColors()
-                    self.modify()
-                del img
+                cols = []
+                for i in range(0, 48, 3):
+                    r, g, b = raw_palette[i], raw_palette[i+1], raw_palette[i+2]
+                    cr, cg, cb = r // 16 * 17, g // 16 * 17, b // 16 * 17
+                    cols.append("#%02x%02x%02x" % (cr, cg, cb))
+
+                pal = data.Palette()
+                pal.init(cols)
+                self.editPanel.palette = pal
+                if shiboken6.isValid(self.animPanel):
+                    self.animPanel.palette = pal
+                self.palette = pal
+                self.battleSprite.palettes[self.curPaletteIdx] = pal
+
+                indexes = list(img.getdata())
+                pixels_hex = "".join(["%x" % idx for idx in indexes])
+                pixel_rows = [pixels_hex[i:i+w] for i in range(0, w*h, w)]
+
+                self.curFrame.convertFromPixelRows(pixel_rows)
+                tw = w // 8
+                th = h // 8
+                newtiles = [None] * len(self.curFrame.tiles)
+                order = self.curFrame.getTileOrder(tw, th)
+                for i in range(len(newtiles)):
+                    newtiles[order[i]] = self.curFrame.tiles[i]
+                self.curFrame.tiles = newtiles
+
+                self.changeBattleSprite()
+                self.updateAnimFrames()
+                self.changeColors()
+                self.modify()
             except Exception as e:
-                QMessageBox.warning(self, f"{fn} is not a GIF or is improperly formatted.",
-                                    self.parent.baseTitle + " -- Error")
+                import traceback
+                QMessageBox.critical(self, "Import failed", f"Error: {str(e)}\n\n{traceback.format_exc()}")
 
     def OnExportImage(self):
         if not shiboken6.isValid(self.editPanel) or self.editPanel.bmp is None:
             return
         size = self.editPanel.bmp.size()
         w, h = size.width(), size.height()
-        dlg = QFileDialog(self, f"Export 16-color {w}x{h} GIF", "", "GIF files (*.gif)")
+        dlg = QFileDialog(self, f"Export 16-color {w}x{h} PNG", "", "PNG files (*.png)")
         dlg.setAcceptMode(QFileDialog.AcceptSave)
         if dlg.exec() == QDialog.Accepted:
             fn = dlg.selectedFiles()[0]
+            # Индексированное изображение (16 цветов)
             img = Image.new("P", (w, h))
             img.putdata([int(a, 16) for pr in self.editPanel.pixels for a in pr])
+            # Палитра RGB (альфу не сохраняем в палитре – прозрачность задаём отдельно)
             p = [v for rt in self.editPanel.palette.rgbaTuples() for v in rt[:3]]
             p += [0] * (768 - len(p))
             img.putpalette(p)
-            img.save(fn, "GIF")
+            # Сохраняем с прозрачностью для индекса 0
+            img.save(fn, "PNG", transparency=0)
 
     def OnShow(self, event=None):
         self.changeColors()
