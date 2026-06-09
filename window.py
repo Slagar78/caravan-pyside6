@@ -1030,7 +1030,8 @@ class BattleMapViewer(MapViewer):
         sx = -btx * 24 - ox
         sy = -bty * 24 - oy
         painter.setPen(self.mapViewPanel.eventCoordPen)
-        painter.drawRoundedRect(sx+8, sy+8, (battle.map_x2 - battle.map_x1) * 24 - 16, (battle.map_y2 - battle.map_y1) * 24 - 16, 8, 8)
+        painter.drawRoundedRect(sx+8, sy+8, (battle.map_x2 - battle.map_x1) * 24 - 16,
+                               (battle.map_y2 - battle.map_y1) * 24 - 16, 8, 8)
 
         for con in range(len(cont.allGroupData)):
             curPanels = cont.allGroupPanels[con]
@@ -1038,7 +1039,8 @@ class BattleMapViewer(MapViewer):
             for idx in range(len(curData)):
                 cp = curPanels[idx]
                 cd = curData[idx]
-                painter.drawPixmap((cd.x - btx) * 24 - ox, (cd.y - bty) * 24 - oy, cp.bmp)  # QPixmap
+                if hasattr(cp, 'bmp') and cp.bmp is not None:
+                    painter.drawPixmap((cd.x - btx) * 24 - ox, (cd.y - bty) * 24 - oy, cp.bmp)
 
         if self.viewerContext == consts.VC_BATTLE_UNITS:
             x = cont.curUnit.x - btx

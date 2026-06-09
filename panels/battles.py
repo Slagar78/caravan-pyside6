@@ -14,11 +14,13 @@ import window, consts
 
 h2i = lambda i: int(i, 16)
 
-icons = []
+icons = []          # список QPixmap для отрисовки на карте
+btn_icons = []      # список QIcon для кнопок
 iconNames = ["lowsky", "plains", "road", "grass", "forest", "hill", "desert", "sky", "water", "blocked"]
 for n in iconNames:
     pixmap = QPixmap("terrain_%s.ico" % n)
-    icons.append(QIcon(pixmap))
+    icons.append(pixmap)
+    btn_icons.append(QIcon(pixmap))
 
 class BattlePanel(rompanel.ROMPanel):
     frameTitle = "Battle Editor"
@@ -35,12 +37,17 @@ class BattlePanel(rompanel.ROMPanel):
         self.curRegionIdx = 0
         self.curPointIdx = 0
 
-        # --- Entities (scroll area) ---
+        # ========================
+        # --- Entities (scroll) ---
+        # ========================
+        entitiesGroup = QGroupBox("Entities")
+        entitiesLayout = QVBoxLayout(entitiesGroup)
+
         self.scrollWnd = QScrollArea()
         self.scrollWnd.setWidgetResizable(True)
-        self.scrollWnd.setFixedSize(210, 180)
+        self.scrollWnd.setMinimumWidth(220)
+        self.scrollWnd.setMinimumHeight(180)
         self.scrollWnd.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        self.scrollWnd.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
 
         scrollWidget = QWidget()
         scrollSizer = QVBoxLayout(scrollWidget)
@@ -104,8 +111,15 @@ class BattlePanel(rompanel.ROMPanel):
         scrollButtonSizer.addWidget(self.addForceButton)
         scrollButtonSizer.addWidget(self.addNPCButton)
 
+        entitiesLayout.addWidget(self.scrollWnd)
+        entitiesLayout.addLayout(scrollButtonSizer)
+
+        # ============================
         # --- Entity Properties ---
-        modifySizer = QHBoxLayout()
+        # ============================
+        modifyGroup = QGroupBox("Entity Properties")
+        modifySizer = QHBoxLayout(modifyGroup)
+
         modifyAnimSizer = QVBoxLayout()
 
         self.modifyAnimPanel = rompanel.SpritePanel(self, None, 24, 24, self.palette, scale=2, bg=None)
@@ -205,7 +219,12 @@ class BattlePanel(rompanel.ROMPanel):
         modifySizer.addLayout(modifyAnimSizer)
         modifySizer.addLayout(modifyMainSizer)
 
-        # ====== Battle properties (tab widget) ======
+        # ================================
+        # --- Battle properties (tabs) ---
+        # ================================
+        battleGroup = QGroupBox("Battle Properties")
+        battleLayout = QVBoxLayout(battleGroup)
+
         self.battleNotebook = QTabWidget()
 
         genWindow = QWidget()
@@ -407,16 +426,16 @@ class BattlePanel(rompanel.ROMPanel):
         bmpWidget = QWidget()
         bmpLayout = QHBoxLayout(bmpWidget)
         self.terrainIconBtns = []
-        for i, bmp in enumerate(icons):
+        for i, icon in enumerate(btn_icons):
             btn = QPushButton()
-            btn.setIcon(bmp)
+            btn.setIcon(icon)
             btn.setToolTip(terraintypes[i])
             btn.setProperty("context", i)
             btn.clicked.connect(self.OnSelectTerrainType)
             bmpLayout.addWidget(btn)
             self.terrainIconBtns.append(btn)
         self.curTerrainBmp = QLabel()
-        self.curTerrainBmp.setPixmap(icons[0].pixmap(32,32))
+        self.curTerrainBmp.setPixmap(icons[0])
         self.curTerrainType = 0
 
         terrainSizer = QVBoxLayout()
@@ -437,12 +456,14 @@ class BattlePanel(rompanel.ROMPanel):
         self.battleNotebook.addTab(mapWindow, "Map")
         self.battleNotebook.addTab(zoneWindow, "AI Zones")
         self.battleNotebook.addTab(terrainWindow, "Terrain")
+        battleLayout.addWidget(self.battleNotebook)
 
-        # Main layout
-        self.sizer.addWidget(self.scrollWnd, 0, 0)
-        self.sizer.addLayout(scrollButtonSizer, 1, 0)
-        self.sizer.addWidget(self.battleNotebook, 0, 1)
-        self.sizer.addLayout(modifySizer, 1, 1)
+        # =======================
+        # --- Main layout ---
+        # =======================
+        self.sizer.addWidget(entitiesGroup, 0, 0, 2, 1)
+        self.sizer.addWidget(modifyGroup, 0, 1, 2, 1)
+        self.sizer.addWidget(battleGroup, 2, 0, 1, 2)
         self.sizer.addWidget(self.mapViewer, 0, 2, 3, 1)
 
         self.changeBattle(0)
@@ -451,7 +472,9 @@ class BattlePanel(rompanel.ROMPanel):
         self.refreshAnimPanels()
         self.disableUnimplemented()
 
-        # Connections
+        # =======================
+        # --- Connections ---
+        # =======================
         self.battleNotebook.currentChanged.connect(self.OnChangePage)
         self.addMonsterButton.clicked.connect(self.OnAddMonsterButton)
         self.addForceButton.clicked.connect(self.OnAddForceButton)
@@ -488,6 +511,12 @@ class BattlePanel(rompanel.ROMPanel):
         self.orderSet2Radio.toggled.connect(self.OnSelectOrderSet)
         self.targetCheck.toggled.connect(self.OnToggleTriggerRegion)
         self.gotoCheck.toggled.connect(self.OnToggleGotoType)
+        self.targetList.currentIndexChanged.connect(self.OnSelectTargetEntry)
+        self.gotoList.currentIndexChanged.connect(self.OnSelectGotoEntry)
+        self.regionType1Radio.toggled.connect(self.OnSelectRegionType1)
+        self.regionType2Radio.toggled.connect(self.OnSelectRegionType2)
+        self.defaultBattleGfxRadio.toggled.connect(self.OnSelectGraphicsDefault)
+        self.overrideBattleGfxRadio.toggled.connect(self.OnSelectGraphicsOverride)
         self.gotoForceRadio.toggled.connect(self.OnSelectGotoForce)
         self.gotoPointRadio.toggled.connect(self.OnSelectGotoPoint)
         self.gotoAllyRadio.toggled.connect(self.OnSelectGotoAlly)
@@ -496,8 +525,8 @@ class BattlePanel(rompanel.ROMPanel):
         self.modifyMisc1Check.toggled.connect(self.OnToggleMisc1)
 
         self.printed = False
-        
-    # ========== Обработчики и вспомогательные методы ==========
+
+    # ========== Вспомогательные методы ==========
     def OnShow(self, event=None):
         pass
 
@@ -552,16 +581,19 @@ class BattlePanel(rompanel.ROMPanel):
             self.curUnit.facing = 1
             self.updateAnimPanels()
             self.modify()
+
     def OnSelectFacingLeft(self, checked):
         if checked:
             self.curUnit.facing = 2
             self.updateAnimPanels()
             self.modify()
+
     def OnSelectFacingRight(self, checked):
         if checked:
             self.curUnit.facing = 0
             self.updateAnimPanels()
             self.modify()
+
     def OnSelectFacingDown(self, checked):
         if checked:
             self.curUnit.facing = 3
@@ -575,7 +607,7 @@ class BattlePanel(rompanel.ROMPanel):
         if self.curUnitContext == 2:
             self.curUnit.idx = num
         else:
-            self.curUnit.idx = num+64
+            self.curUnit.idx = num + 64
         self.modifyList.setValue(num)
         self.updateAnimPanels()
         self.modify()
@@ -600,54 +632,57 @@ class BattlePanel(rompanel.ROMPanel):
         self.updateModifyEntity()
 
     def OnToggleTriggerRegion(self, checked):
-        self.curUnit.ai[self.curOrderSet+1][1] = 15 - (checked * 15)
+        self.curUnit.ai[self.curOrderSet + 1][1] = 15 - (checked * 15)
         self.updateTargetList()
         self.updateModifyEntity()
         self.modify()
 
     def OnToggleGotoType(self, checked):
-        self.curUnit.ai[self.curOrderSet+1][0] = 255 - (checked * 255)
+        self.curUnit.ai[self.curOrderSet + 1][0] = 255 - (checked * 255)
         self.updateGotoList()
         self.updateModifyEntity()
         self.modify()
 
     def OnSelectTargetEntry(self, idx):
         if idx >= 0:
-            self.curUnit.ai[self.curOrderSet+1][1] = idx
+            self.curUnit.ai[self.curOrderSet + 1][1] = idx
             self.modify()
 
     def OnSelectGotoForce(self, checked):
         if checked:
-            self.curUnit.ai[self.curOrderSet+1][0] = 0
+            self.curUnit.ai[self.curOrderSet + 1][0] = 0
             self.updateGotoList()
             self.modify()
 
     def OnSelectGotoPoint(self, checked):
         if checked:
-            self.curUnit.ai[self.curOrderSet+1][0] = 64
+            self.curUnit.ai[self.curOrderSet + 1][0] = 64
             self.updateGotoList()
             self.modify()
 
     def OnSelectGotoAlly(self, checked):
         if checked:
-            self.curUnit.ai[self.curOrderSet+1][0] = 128
+            self.curUnit.ai[self.curOrderSet + 1][0] = 128
             self.updateGotoList()
             self.modify()
 
     def OnSelectGotoEntry(self, idx):
-        if idx < 0: return
-        type = int(self.curUnit.ai[self.curOrderSet+1][0] / 64)
-        if type == 2 and idx >= self.curUnitIdx:
+        if idx < 0:
+            return
+        type_ = int(self.curUnit.ai[self.curOrderSet + 1][0] / 64)
+        if type_ == 2 and idx >= self.curUnitIdx:
             idx += 1
-        self.curUnit.ai[self.curOrderSet+1][0] = type*64 + idx
+        self.curUnit.ai[self.curOrderSet + 1][0] = type_ * 64 + idx
         self.modify()
 
     def OnToggleReinforce(self, checked):
         self.curUnit.reinforce = checked
         self.modify()
+
     def OnToggleRespawn(self, checked):
         self.curUnit.respawn = checked
         self.modify()
+
     def OnToggleMisc1(self, checked):
         self.curUnit.misc1 = checked
         self.modify()
@@ -656,6 +691,7 @@ class BattlePanel(rompanel.ROMPanel):
         if checked:
             self.curBattle.boss = False
             self.modify()
+
     def OnSelectWinBoss(self, checked):
         if checked:
             self.curBattle.boss = True
@@ -665,13 +701,27 @@ class BattlePanel(rompanel.ROMPanel):
         self.curBattle.map_index = idx
         self.modify()
 
-    def OnChangeBoundsX(self, val): self.curBattle.map_x1 = val; self.modify()
-    def OnChangeBoundsY(self, val): self.curBattle.map_y1 = val; self.modify()
-    def OnChangeBoundsX2(self, val): self.curBattle.map_x2 = val; self.modify()
-    def OnChangeBoundsY2(self, val): self.curBattle.map_y2 = val; self.modify()
+    def OnChangeBoundsX(self, val):
+        self.curBattle.map_x1 = val
+        self.modify()
 
-    def OnSelectRegion(self, idx): self.changeRegion(idx)
-    def OnSelectPoint(self, idx): self.changePoint(idx)
+    def OnChangeBoundsY(self, val):
+        self.curBattle.map_y1 = val
+        self.modify()
+
+    def OnChangeBoundsX2(self, val):
+        self.curBattle.map_x2 = val
+        self.modify()
+
+    def OnChangeBoundsY2(self, val):
+        self.curBattle.map_y2 = val
+        self.modify()
+
+    def OnSelectRegion(self, idx):
+        self.changeRegion(idx)
+
+    def OnSelectPoint(self, idx):
+        self.changePoint(idx)
 
     def changeRegion(self, num):
         region = self.curBattle.regions[num]
@@ -700,66 +750,99 @@ class BattlePanel(rompanel.ROMPanel):
         self.mapViewer.refreshMapView()
 
     def OnSelectRegionType1(self, checked):
-        if checked: self.curBattle.regions[self.curRegionIdx].type = 4; self.modify()
-    def OnSelectRegionType2(self, checked):
-        if checked: self.curBattle.regions[self.curRegionIdx].type = 3; self.modify()
+        if checked:
+            self.curBattle.regions[self.curRegionIdx].type = 4
+            self.modify()
 
-    def OnChangeRegionX(self, val): self.changeRegionX(val)
+    def OnSelectRegionType2(self, checked):
+        if checked:
+            self.curBattle.regions[self.curRegionIdx].type = 3
+            self.modify()
+
+    def OnChangeRegionX(self, val):
+        self.changeRegionX(val)
+
     def changeRegionX(self, num):
         self.curBattle.regions[self.curRegionIdx].p1[0] = num
         self.regionXCtrl.setValue(num)
         self.modify()
         self.mapViewer.refreshMapView()
-    def OnChangeRegionY(self, val): self.changeRegionY(val)
+
+    def OnChangeRegionY(self, val):
+        self.changeRegionY(val)
+
     def changeRegionY(self, num):
         self.curBattle.regions[self.curRegionIdx].p1[1] = num
         self.regionYCtrl.setValue(num)
         self.modify()
         self.mapViewer.refreshMapView()
-    def OnChangeRegionX2(self, val): self.changeRegionX2(val)
+
+    def OnChangeRegionX2(self, val):
+        self.changeRegionX2(val)
+
     def changeRegionX2(self, num):
         self.curBattle.regions[self.curRegionIdx].p2[0] = num
         self.regionX2Ctrl.setValue(num)
         self.modify()
         self.mapViewer.refreshMapView()
-    def OnChangeRegionY2(self, val): self.changeRegionY2(val)
+
+    def OnChangeRegionY2(self, val):
+        self.changeRegionY2(val)
+
     def changeRegionY2(self, num):
         self.curBattle.regions[self.curRegionIdx].p2[1] = num
         self.regionY2Ctrl.setValue(num)
         self.modify()
         self.mapViewer.refreshMapView()
-    def OnChangeRegionX3(self, val): self.changeRegionX3(val)
+
+    def OnChangeRegionX3(self, val):
+        self.changeRegionX3(val)
+
     def changeRegionX3(self, num):
         self.curBattle.regions[self.curRegionIdx].p3[0] = num
         self.regionX3Ctrl.setValue(num)
         self.modify()
         self.mapViewer.refreshMapView()
-    def OnChangeRegionY3(self, val): self.changeRegionY3(val)
+
+    def OnChangeRegionY3(self, val):
+        self.changeRegionY3(val)
+
     def changeRegionY3(self, num):
         self.curBattle.regions[self.curRegionIdx].p3[1] = num
         self.regionY3Ctrl.setValue(num)
         self.modify()
         self.mapViewer.refreshMapView()
-    def OnChangeRegionX4(self, val): self.changeRegionX4(val)
+
+    def OnChangeRegionX4(self, val):
+        self.changeRegionX4(val)
+
     def changeRegionX4(self, num):
         self.curBattle.regions[self.curRegionIdx].p4[0] = num
         self.regionX4Ctrl.setValue(num)
         self.modify()
         self.mapViewer.refreshMapView()
-    def OnChangeRegionY4(self, val): self.changeRegionY4(val)
+
+    def OnChangeRegionY4(self, val):
+        self.changeRegionY4(val)
+
     def changeRegionY4(self, num):
         self.curBattle.regions[self.curRegionIdx].p4[1] = num
         self.regionY4Ctrl.setValue(num)
         self.modify()
         self.mapViewer.refreshMapView()
 
-    def OnChangePointX(self, val): self.changePointX(val)
+    def OnChangePointX(self, val):
+        self.changePointX(val)
+
     def changePointX(self, num):
         self.curBattle.points[self.curPointIdx][0] = num
         self.pointYCtrl.setValue(num)
         self.modify()
         self.mapViewer.refreshMapView()
-    def OnChangePointY(self, val): self.changePointY(val)
+
+    def OnChangePointY(self, val):
+        self.changePointY(val)
+
     def changePointY(self, num):
         self.curBattle.points[self.curPointIdx][1] = num
         self.pointYCtrl.setValue(num)
@@ -772,16 +855,19 @@ class BattlePanel(rompanel.ROMPanel):
         self.changeTerrainType(context)
 
     def changeTerrainType(self, num):
-        self.curTerrainBmp.setPixmap(icons[num].pixmap(32,32))
-        if num == len(icons)-1:
+        self.curTerrainBmp.setPixmap(icons[num])
+        if num == len(icons) - 1:
             self.curTerrainType = 255
         else:
             self.curTerrainType = num
 
     def OnSelectGraphicsDefault(self, checked):
-        if checked: self.updateGeneralWindow()
+        if checked:
+            self.updateGeneralWindow()
+
     def OnSelectGraphicsOverride(self, checked):
-        if checked: self.updateGeneralWindow()
+        if checked:
+            self.updateGeneralWindow()
 
     def changeBattle(self, num):
         self.curBattleIdx = num
@@ -836,11 +922,11 @@ class BattlePanel(rompanel.ROMPanel):
     def updateGotoList(self):
         battle = self.curBattle
         self.gotoList.clear()
-        type = self.curUnit.ai[self.curOrderSet+1][0] // 64
-        text = ["Force Member %i", "Point %i", "Monster %i", ""][type]
-        num = [len(battle.force), len(battle.points), len(battle.enemies), 0][type]
+        type_ = self.curUnit.ai[self.curOrderSet + 1][0] // 64
+        text = ["Force Member %i", "Point %i", "Monster %i", ""][type_]
+        num = [len(battle.force), len(battle.points), len(battle.enemies), 0][type_]
         items = [text % i for i in range(num)]
-        if type == 2:
+        if type_ == 2:
             items.pop(self.curUnitIdx)
         self.gotoList.addItems(items)
         self.gotoList.setCurrentIndex(0)
@@ -867,19 +953,20 @@ class BattlePanel(rompanel.ROMPanel):
                 if ap.used:
                     idx = curData[p].idx * 3
                     if not sprites[idx].loaded:
-                        self.rom.getSprites(idx, idx+2)
+                        self.rom.getSprites(idx, idx + 2)
                     if con == 2:
-                        ap.sprite = sprites[idx+[1,0,1,2][curData[p].facing]]
+                        ap.sprite = sprites[idx + [1, 0, 1, 2][curData[p].facing]]
                         ap.flip = curData[p].facing == 0
                     else:
-                        ap.sprite = sprites[idx+2]
+                        ap.sprite = sprites[idx + 2]
                         ap.flip = False
                     ap.context = con
                     ap.num = p
                 else:
                     ap.sprite = None
                     ap.refreshSprite([])
-        self.scrollWnd.widget().adjustSize()
+        scrollWidget = self.scrollWnd.widget()
+        scrollWidget.resize(scrollWidget.sizeHint())
 
     def refreshAnimPanels(self):
         for con in range(len(self.allGroupPanels)):
@@ -914,7 +1001,7 @@ class BattlePanel(rompanel.ROMPanel):
             self.modifyFacingLeftRadio.setChecked(unit.facing == 2)
             self.modifyFacingDownRadio.setChecked(unit.facing == 3)
         else:
-            self.modifyList.setValue(unit.idx-64)
+            self.modifyList.setValue(unit.idx - 64)
             self.modifyList.setRange(0, 173)
         self.modifyFacingUpRadio.setEnabled(isNPC)
         self.modifyFacingLeftRadio.setEnabled(isNPC)
@@ -931,7 +1018,7 @@ class BattlePanel(rompanel.ROMPanel):
         self.orderSet1Radio.setChecked(self.curOrderSet == 0)
         self.orderSet2Radio.setChecked(self.curOrderSet == 1)
         if hasAI:
-            order = unit.ai[self.curOrderSet+1]
+            order = unit.ai[self.curOrderSet + 1]
             orderType = order[0] // 64
             orderRegion = order[1]
         else:
@@ -963,11 +1050,11 @@ class BattlePanel(rompanel.ROMPanel):
         self.modifyMiscRespawnCheck.setEnabled(hasAI)
         self.modifyMisc1Check.setEnabled(hasAI)
         if hasAI:
-            orderNum = unit.ai[self.curOrderSet+1][0] % 32
+            orderNum = unit.ai[self.curOrderSet + 1][0] % 32
             if orderType == 2 and orderNum > self.curUnitIdx:
                 orderNum -= 1
             self.gotoList.setCurrentIndex(orderNum)
-            self.targetList.setCurrentIndex(unit.ai[self.curOrderSet+1][1])
+            self.targetList.setCurrentIndex(unit.ai[self.curOrderSet + 1][1])
 
     def updateGeneralWindow(self):
         battle = self.curBattle

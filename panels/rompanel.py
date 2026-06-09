@@ -251,6 +251,10 @@ class SpritePanel(QWidget):
             self.setFixedSize(int(width * scale + xpad * 2), int(height * scale + ypad * 2))
         
         self.setAttribute(Qt.WA_OpaquePaintEvent, False)
+        
+        self.bmp = None
+        self.sprite = None
+        self.flip = False
 
         self.refreshSprite(self.pixels)
 
