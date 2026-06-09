@@ -28,6 +28,11 @@ class ROMFrame(QMdiSubWindow):
         self.outerPanel.layout().addWidget(self.contentPanel)
         if not self.contentPanel.canMaximize:
             self.setMaximumSize(self.sizeHint())
+            
+    def showEvent(self, event):
+        super().showEvent(event)
+        if hasattr(self, 'contentPanel') and self.contentPanel.__class__.__name__ == 'BattlePanel':
+            QTimer.singleShot(0, self.showMaximized)            
 
     def OnClose(self, event):
         if self in self.parent.frames:

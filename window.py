@@ -32,9 +32,7 @@ class CaravanChildFrame(QMdiSubWindow):
         self.setWindowTitle(title)
         self.setWindowIcon(caravanIcon)
         self.id = id
-        # В оригинале CreateStatusBar, в MDI окне не всегда нужно, но добавим QStatusBar
-        # В QMdiSubWindow нет своего статусбара, можно не добавлять
-        # Но если требуется, можно вставить QStatusBar в макет.
+
 
 class MapViewer(QWidget):
     """Просмотрщик карт, аналог wx.Panel с интерфейсом карты"""
@@ -111,13 +109,15 @@ class MapViewer(QWidget):
             self.viewGrid.setColumnStretch(0, 1)
             self.viewGrid.setRowStretch(0, 1)
 
-            # Временно: MapViewPanel будет заменена позже, но используем как есть (предполагаем, что она портирована)
-            self.mapViewPanel = rompanel.MapViewPanel(self.mainPanel, None, 24*20, 24*20, self.palette, scale=1, bg=16, func=self.OnClickViewPanel, edit=True, grid=24)
+            # 
+            self.mapViewPanel = rompanel.MapViewPanel(self.mainPanel, None, 24*64, 24*64, self.palette, scale=1, bg=16, func=self.OnClickViewPanel, edit=True, grid=24)
             self.mapViewPanel.id = 0
+            
+            self.mapViewPanel.setMinimumSize(0, 0)
+            self.mapViewPanel.setMaximumSize(16777215, 16777215)
+            self.mapViewPanel.setFixedSize(16777215, 16777215)   # насильно снимаем все ограничения
+            
             self.mapViewPanel.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-            self.mapViewPanel.setMinimumSize(480, 480)
-            self.mapViewPanel.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-            self.mapViewPanel.setMinimumSize(480, 480)
             
             from PySide6.QtGui import QPen, QColor
             
@@ -241,7 +241,8 @@ class MapViewer(QWidget):
             # Остальные события (колесо, закрытие) обрабатываются переопределением методов
             self.setMouseTracking(True)  # чтобы получать движения мыши
 
-        if map is not None or palette is not None:
+        if map is not None or palette is not None:                
+            
             self.changeMap(map, palette)
 
     def eventFilter(self, obj, event):
@@ -866,8 +867,6 @@ class BattleMapViewer(MapViewer):
                 bx = blockX - battle.map_x1
                 by = blockY - battle.map_y1
                 if modifiers & Qt.ShiftModifier:
-                    # поиск юнита для переключения
-                    swap = None
                     for g, con in enumerate(cont.allGroupData):
                         for i, u in enumerate(con):
                             if u.x == bx and u.y == by and u is not cont.curUnit:
@@ -877,8 +876,8 @@ class BattleMapViewer(MapViewer):
                 else:
                     cont.curUnit.x = bx
                     cont.curUnit.y = by
-                    cont.modifyXCtrl.SetValue(bx)
-                    cont.modifyYCtrl.SetValue(by)
+                    cont.modifyXCtrl.setValue(bx)    # ← исправлено
+                    cont.modifyYCtrl.setValue(by)    # ← исправлено
                     cont.modify()
                     self.refreshMapView()
             elif button == Qt.RightButton:
@@ -904,8 +903,8 @@ class BattleMapViewer(MapViewer):
                         swap.y = cont.curUnit.y
                         cont.curUnit.x = bx
                         cont.curUnit.y = by
-                        cont.modifyXCtrl.SetValue(bx)
-                        cont.modifyYCtrl.SetValue(by)
+                        cont.modifyXCtrl.setValue(bx)    # ← исправлено
+                        cont.modifyYCtrl.setValue(by)    # ← исправлено
                     cont.modify()
                     self.refreshMapView()
             event.accept()
@@ -921,8 +920,8 @@ class BattleMapViewer(MapViewer):
                         for unit in con:
                             unit.x -= diffX
                             unit.y -= diffY
-                    cont.modifyXCtrl.SetValue(cont.curUnit.x)
-                    cont.modifyYCtrl.SetValue(cont.curUnit.y)
+                    cont.modifyXCtrl.setValue(cont.curUnit.x)    # ← исправлено
+                    cont.modifyYCtrl.setValue(cont.curUnit.y)    # ← исправлено
                 if modifiers & Qt.ControlModifier:
                     battle.map_x2 += diffX
                     battle.map_y2 += diffY
@@ -936,8 +935,8 @@ class BattleMapViewer(MapViewer):
                         for unit in con:
                             unit.x += diffX
                             unit.y += diffY
-                    cont.modifyXCtrl.SetValue(cont.curUnit.x)
-                    cont.modifyYCtrl.SetValue(cont.curUnit.y)
+                    cont.modifyXCtrl.setValue(cont.curUnit.x)    # ← исправлено
+                    cont.modifyYCtrl.setValue(cont.curUnit.y)    # ← исправлено
                 if modifiers & Qt.ControlModifier:
                     for con in cont.allGroupData:
                         for unit in con:
@@ -947,10 +946,10 @@ class BattleMapViewer(MapViewer):
                     battle.map_y1 += diffY
             else:
                 event.ignore(); return
-            cont.boundsXCtrl.SetValue(battle.map_x1)
-            cont.boundsYCtrl.SetValue(battle.map_y1)
-            cont.boundsX2Ctrl.SetValue(battle.map_x2)
-            cont.boundsY2Ctrl.SetValue(battle.map_y2)
+            cont.boundsXCtrl.setValue(battle.map_x1)    # ← исправлено
+            cont.boundsYCtrl.setValue(battle.map_y1)    # ← исправлено
+            cont.boundsX2Ctrl.setValue(battle.map_x2)   # ← исправлено
+            cont.boundsY2Ctrl.setValue(battle.map_y2)   # ← исправлено
             obj.update()
             cont.modify()
             self.refreshMapView()
@@ -1006,7 +1005,6 @@ class BattleMapViewer(MapViewer):
             event.accept()
 
         else:
-            # Для остальных контекстов вызываем базовый обработчик MapViewer
             super().mousePressEvent(event)
 
     # ========== Переопределение mouseMoveEvent для drag в AI/AREA ==========

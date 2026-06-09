@@ -45,7 +45,7 @@ class BattlePanel(rompanel.ROMPanel):
 
         self.scrollWnd = QScrollArea()
         self.scrollWnd.setWidgetResizable(True)
-        self.scrollWnd.setMinimumWidth(220)
+        self.scrollWnd.setMinimumWidth(240)
         self.scrollWnd.setMinimumHeight(180)
         self.scrollWnd.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
 
@@ -461,17 +461,38 @@ class BattlePanel(rompanel.ROMPanel):
         # =======================
         # --- Main layout ---
         # =======================
+        # Добавляем виджеты
         self.sizer.addWidget(entitiesGroup, 0, 0, 2, 1)
         self.sizer.addWidget(modifyGroup, 0, 1, 2, 1)
         self.sizer.addWidget(battleGroup, 2, 0, 1, 2)
         self.sizer.addWidget(self.mapViewer, 0, 2, 3, 1)
 
-        self.changeBattle(0)
-        self.updateAnimPanels()
-        self.setAnimPanelSelected(True)
-        self.refreshAnimPanels()
-        self.disableUnimplemented()
+        # Левые панели: могут сжиматься, но не бесконечно
+        entitiesGroup.setMaximumWidth(250)
+        modifyGroup.setMaximumWidth(420)
+        entitiesGroup.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Preferred)
+        modifyGroup.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Preferred)
 
+        # Карта: агрессивно расширяется по всем направлениям
+        self.mapViewer.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+
+        # Растягиваем колонку с картой (индекс 2)
+        self.sizer.setColumnStretch(0, 0)
+        self.sizer.setColumnStretch(1, 0)
+        self.sizer.setColumnStretch(2, 1)
+
+        # Растягиваем строки, в которых находится карта
+        self.sizer.setRowStretch(0, 1)
+        self.sizer.setRowStretch(1, 1)
+        self.sizer.setRowStretch(2, 0)
+
+        # Минимальные размеры окна
+        self.setMinimumWidth(900)
+        self.setMinimumHeight(600)
+
+        # Принудительно даём самой панели заполнять всё доступное место
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        
         # =======================
         # --- Connections ---
         # =======================
@@ -529,6 +550,7 @@ class BattlePanel(rompanel.ROMPanel):
     # ========== Вспомогательные методы ==========
     def OnShow(self, event=None):
         pass
+           
 
     def OnSelectBattle(self, idx):
         self.changeBattle(idx)
