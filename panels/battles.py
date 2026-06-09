@@ -3,19 +3,18 @@ from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel,
     QPushButton, QComboBox, QSpinBox, QRadioButton, QCheckBox,
     QScrollArea, QTabWidget, QTableWidget, QTableWidgetItem,
-    QStyleFactory, QMessageBox, QFileDialog, QFrame, QSizePolicy,
-    QAbstractItemView, QHeaderView, QGroupBox
+    QGroupBox, QSizePolicy, QSlider
 )
-from PySide6.QtCore import Qt, QTimer, QEvent, QSize
-from PySide6.QtGui import QPixmap, QColor, QBrush, QPen, QFont, QIcon
+from PySide6.QtCore import Qt, QTimer
+from PySide6.QtGui import QPixmap, QColor, QBrush, QIcon, QFont
 import rompanel
 import data
 import window, consts
 
 h2i = lambda i: int(i, 16)
 
-icons = []          # список QPixmap для отрисовки на карте
-btn_icons = []      # список QIcon для кнопок
+icons = []
+btn_icons = []
 iconNames = ["lowsky", "plains", "road", "grass", "forest", "hill", "desert", "sky", "water", "blocked"]
 for n in iconNames:
     pixmap = QPixmap("terrain_%s.ico" % n)
@@ -23,6 +22,7 @@ for n in iconNames:
     btn_icons.append(QIcon(pixmap))
 
 class BattlePanel(rompanel.ROMPanel):
+    canMaximize = True
     frameTitle = "Battle Editor"
 
     def init(self):
@@ -38,29 +38,38 @@ class BattlePanel(rompanel.ROMPanel):
         self.curPointIdx = 0
 
         # ========================
-        # --- Entities (scroll) ---
+        # --- Левая вертикальная панель ---
         # ========================
+        leftPanel = QWidget()
+        leftLayout = QVBoxLayout(leftPanel)
+        leftLayout.setContentsMargins(1, 1, 1, 1)
+        leftLayout.setSpacing(1)
+
+        # --- Entities ---
         entitiesGroup = QGroupBox("Entities")
         entitiesLayout = QVBoxLayout(entitiesGroup)
+        entitiesLayout.setContentsMargins(1, 1, 1, 1)
+        entitiesLayout.setSpacing(0)
 
         self.scrollWnd = QScrollArea()
         self.scrollWnd.setWidgetResizable(True)
-        self.scrollWnd.setMinimumWidth(240)
-        self.scrollWnd.setMinimumHeight(180)
+        self.scrollWnd.setMinimumWidth(180)
+        self.scrollWnd.setMinimumHeight(80)
         self.scrollWnd.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
 
         scrollWidget = QWidget()
         scrollSizer = QVBoxLayout(scrollWidget)
-        scrollWidget.setLayout(scrollSizer)
+        scrollSizer.setContentsMargins(0, 0, 0, 0)
+        scrollSizer.setSpacing(0)
 
-        text4 = QLabel("Monsters")
-        text5 = QLabel("Shining Force Placeholder Entities")
-        text7 = QLabel("NPCs")
-        text8 = QLabel("Add:")
+        lblMonsters = QLabel("Monsters")
+        lblForce = QLabel("Force")
+        lblNPCs = QLabel("NPCs")
+        lblAdd = QLabel("Add:")
 
-        self.monsterSizer = QGridLayout()
-        self.forceSizer = QGridLayout()
-        self.npcSizer = QGridLayout()
+        self.monsterSizer = QGridLayout(); self.monsterSizer.setSpacing(0)
+        self.forceSizer    = QGridLayout(); self.forceSizer.setSpacing(0)
+        self.npcSizer      = QGridLayout(); self.npcSizer.setSpacing(0)
 
         self.monsterPanels = []
         self.forcePanels = []
@@ -74,7 +83,8 @@ class BattlePanel(rompanel.ROMPanel):
             curSizer = self.allGroupSizers[con]
             rows, cols = 8, 4
             for p in range(rows * cols):
-                ap = rompanel.SpritePanel(scrollWidget, None, 24, 24, self.palette, scale=2, bg=None, func=self.OnClickPanel)
+                ap = rompanel.SpritePanel(scrollWidget, None, 24, 24, self.palette,
+                                          scale=1, bg=None, func=self.OnClickPanel)
                 ap.refreshSprite([])
                 ap.context = con
                 ap.num = p
@@ -89,24 +99,25 @@ class BattlePanel(rompanel.ROMPanel):
         self.timer.timeout.connect(self.OnAnimNext)
         self.changeAnim(0)
 
-        scrollSizer.addWidget(text4)
+        scrollSizer.addWidget(lblMonsters)
         scrollSizer.addLayout(self.monsterSizer)
-        scrollSizer.addWidget(text5)
+        scrollSizer.addWidget(lblForce)
         scrollSizer.addLayout(self.forceSizer)
-        scrollSizer.addWidget(text7)
+        scrollSizer.addWidget(lblNPCs)
         scrollSizer.addLayout(self.npcSizer)
         scrollSizer.addStretch()
 
         self.scrollWnd.setWidget(scrollWidget)
 
         scrollButtonSizer = QHBoxLayout()
+        scrollButtonSizer.setSpacing(2)
         self.addMonsterButton = QPushButton("Monster")
-        self.addForceButton = QPushButton("Member")
+        self.addForceButton = QPushButton("Force")
         self.addNPCButton = QPushButton("NPC")
-        self.addMonsterButton.setFixedSize(55, 20)
-        self.addForceButton.setFixedSize(55, 20)
-        self.addNPCButton.setFixedSize(40, 20)
-        scrollButtonSizer.addWidget(text8)
+        self.addMonsterButton.setFixedSize(50, 18)
+        self.addForceButton.setFixedSize(45, 18)
+        self.addNPCButton.setFixedSize(35, 18)
+        scrollButtonSizer.addWidget(lblAdd)
         scrollButtonSizer.addWidget(self.addMonsterButton)
         scrollButtonSizer.addWidget(self.addForceButton)
         scrollButtonSizer.addWidget(self.addNPCButton)
@@ -114,290 +125,259 @@ class BattlePanel(rompanel.ROMPanel):
         entitiesLayout.addWidget(self.scrollWnd)
         entitiesLayout.addLayout(scrollButtonSizer)
 
-        # ============================
         # --- Entity Properties ---
-        # ============================
-        modifyGroup = QGroupBox("Entity Properties")
-        modifySizer = QHBoxLayout(modifyGroup)
+        modifyGroup = QGroupBox("Properties")
+        modifySizer = QVBoxLayout(modifyGroup)
+        modifySizer.setContentsMargins(1, 1, 1, 1)
+        modifySizer.setSpacing(1)
 
-        modifyAnimSizer = QVBoxLayout()
-
-        self.modifyAnimPanel = rompanel.SpritePanel(self, None, 24, 24, self.palette, scale=2, bg=None)
+        animRow = QHBoxLayout()
+        animRow.setSpacing(2)
+        self.modifyAnimPanel = rompanel.SpritePanel(self, None, 24, 24, self.palette, scale=1, bg=None)
         self.modifyFacingUpRadio = QRadioButton()
         self.modifyFacingLeftRadio = QRadioButton()
         self.modifyFacingRightRadio = QRadioButton()
         self.modifyFacingDownRadio = QRadioButton()
         self.modifyFacingRightRadio.setChecked(True)
-        self.modifyDeleteButton = QPushButton("Delete")
-        self.modifyDeleteButton.setFixedSize(40, 20)
+        self.modifyDeleteButton = QPushButton("Del")
+        self.modifyDeleteButton.setFixedSize(25, 18)
 
-        modifyAnimFacingMidSizer = QHBoxLayout()
-        modifyAnimFacingMidSizer.addWidget(self.modifyFacingLeftRadio)
-        modifyAnimFacingMidSizer.addWidget(self.modifyFacingRightRadio)
+        facingGrid = QGridLayout()
+        facingGrid.setSpacing(0)
+        facingGrid.addWidget(self.modifyFacingUpRadio, 0, 1)
+        facingGrid.addWidget(self.modifyFacingLeftRadio, 1, 0)
+        facingGrid.addWidget(self.modifyFacingRightRadio, 1, 2)
+        facingGrid.addWidget(self.modifyFacingDownRadio, 2, 1)
 
-        modifyAnimSizer.addWidget(self.modifyAnimPanel)
-        modifyAnimSizer.addWidget(self.modifyFacingUpRadio, 0, Qt.AlignCenter)
-        modifyAnimSizer.addLayout(modifyAnimFacingMidSizer)
-        modifyAnimSizer.addWidget(self.modifyFacingDownRadio, 0, Qt.AlignCenter)
-        modifyAnimSizer.addWidget(self.modifyDeleteButton)
+        animRow.addWidget(self.modifyAnimPanel)
+        animRow.addLayout(facingGrid)
+        animRow.addWidget(self.modifyDeleteButton)
+        modifySizer.addLayout(animRow)
 
-        modifyMainSizer = QVBoxLayout()
-        modifyTopSizer = QHBoxLayout()
+        grid = QGridLayout()
+        grid.setSpacing(2)
 
-        text_unit = QLabel("    Unit (temp.)")
-        self.modifyList = QSpinBox()
-        self.modifyList.setMaximum(175)
-        self.modifyItemList = QComboBox()
-        self.modifyXCtrl = QSpinBox()
-        self.modifyXCtrl.setMaximum(47)
-        self.modifyYCtrl = QSpinBox()
-        self.modifyYCtrl.setMaximum(47)
+        self.modifyList = QSpinBox(); self.modifyList.setMaximum(175); self.modifyList.setFixedWidth(40)
+        self.modifyItemList = QComboBox(); self.modifyItemList.setFixedWidth(50)
+        self.modifyXCtrl = QSpinBox(); self.modifyXCtrl.setMaximum(47); self.modifyXCtrl.setFixedWidth(30)
+        self.modifyYCtrl = QSpinBox(); self.modifyYCtrl.setMaximum(47); self.modifyYCtrl.setFixedWidth(30)
 
-        modifyTopSizer.addWidget(text_unit)
-        modifyTopSizer.addWidget(self.modifyList)
-        modifyTopSizer.addWidget(QLabel("Item"))
-        modifyTopSizer.addWidget(self.modifyItemList)
-        modifyTopSizer.addWidget(QLabel("X"))
-        modifyTopSizer.addWidget(self.modifyXCtrl)
-        modifyTopSizer.addWidget(QLabel("Y"))
-        modifyTopSizer.addWidget(self.modifyYCtrl)
+        grid.addWidget(QLabel("Unit"), 0, 0)
+        grid.addWidget(self.modifyList, 0, 1)
+        grid.addWidget(QLabel("Item"), 0, 2)
+        grid.addWidget(self.modifyItemList, 0, 3)
+        grid.addWidget(QLabel("X"), 0, 4)
+        grid.addWidget(self.modifyXCtrl, 0, 5)
+        grid.addWidget(QLabel("Y"), 0, 6)
+        grid.addWidget(self.modifyYCtrl, 0, 7)
 
-        modifyMainSizer.addLayout(modifyTopSizer)
+        self.modifyAICtrl = QSpinBox(); self.modifyAICtrl.setMaximum(15); self.modifyAICtrl.setFixedWidth(35)
+        self.modifyMiscReinforceCheck = QCheckBox("Reinf")
+        self.modifyMiscRespawnCheck = QCheckBox("Resp")
+        self.modifyMisc1Check = QCheckBox("???")
 
-        # AI sub-panels
-        blankText = QLabel(" ")
-        self.orderSet1Radio = QRadioButton(" Edit Order Set 1")
-        self.orderSet2Radio = QRadioButton(" Edit Order Set 2")
-        self.orderSet1Radio.setChecked(True)
+        grid.addWidget(QLabel("AI"), 1, 0)
+        grid.addWidget(self.modifyAICtrl, 1, 1)
+        grid.addWidget(self.modifyMiscReinforceCheck, 1, 2, 1, 2)
+        grid.addWidget(self.modifyMiscRespawnCheck, 1, 4)
+        grid.addWidget(self.modifyMisc1Check, 1, 6)
 
-        self.targetCheck = QCheckBox(" Use trigger region...")
-        self.targetList = QComboBox()
-        self.gotoCheck = QCheckBox(" Use spec. move order...")
-        self.gotoForceRadio = QRadioButton(" Follow force member...")
-        self.gotoPointRadio = QRadioButton(" Move towards point...")
-        self.gotoAllyRadio = QRadioButton(" Follow ally...")
-        self.gotoForceRadio.setChecked(True)
-        self.gotoList = QComboBox()
+        self.orderSet1Radio = QRadioButton("Set1"); self.orderSet1Radio.setChecked(True)
+        self.orderSet2Radio = QRadioButton("Set2")
+        self.targetCheck = QCheckBox("Reg")
+        self.targetList = QComboBox(); self.targetList.setFixedWidth(60)
 
-        aiText = QLabel("AI:")
-        self.modifyAICtrl = QSpinBox()
-        self.modifyAICtrl.setMaximum(15)
+        grid.addWidget(self.orderSet1Radio, 2, 0, 1, 2)
+        grid.addWidget(self.orderSet2Radio, 2, 2, 1, 2)
+        grid.addWidget(self.targetCheck, 2, 4)
+        grid.addWidget(self.targetList, 2, 6)
 
-        modifyMiscSizer = QVBoxLayout()
-        self.modifyMiscItemBrokenCheck = QCheckBox(" Extra item is broken")
-        self.modifyMiscReinforceCheck = QCheckBox(" Region-triggered spawn")
-        self.modifyMiscRespawnCheck = QCheckBox(" Continually respawn")
-        self.modifyMisc1Check = QCheckBox(" ???")
-        modifyMiscSizer.addWidget(aiText)
-        modifyMiscSizer.addWidget(self.modifyAICtrl)
-        modifyMiscSizer.addWidget(self.modifyMiscItemBrokenCheck)
-        modifyMiscSizer.addWidget(self.modifyMiscReinforceCheck)
-        modifyMiscSizer.addWidget(self.modifyMiscRespawnCheck)
-        modifyMiscSizer.addWidget(self.modifyMisc1Check)
+        self.gotoCheck = QCheckBox("Move")
+        self.gotoForceRadio = QRadioButton("Frc"); self.gotoForceRadio.setChecked(True)
+        self.gotoPointRadio = QRadioButton("Pnt")
+        self.gotoAllyRadio = QRadioButton("Aly")
+        self.gotoList = QComboBox(); self.gotoList.setFixedWidth(60)
 
-        modifyTargetSizer = QVBoxLayout()
-        modifyTargetSizer.addWidget(self.orderSet1Radio)
-        modifyTargetSizer.addWidget(self.orderSet2Radio)
-        modifyTargetSizer.addWidget(blankText)
-        modifyTargetSizer.addWidget(self.targetCheck)
-        modifyTargetSizer.addWidget(self.targetList)
+        grid.addWidget(self.gotoCheck, 3, 0)
+        grid.addWidget(self.gotoForceRadio, 3, 1)
+        grid.addWidget(self.gotoPointRadio, 3, 2)
+        grid.addWidget(self.gotoAllyRadio, 3, 3)
+        grid.addWidget(self.gotoList, 3, 6)
 
-        modifyGotoSizer = QVBoxLayout()
-        modifyGotoSizer.addWidget(self.gotoCheck)
-        modifyGotoSizer.addWidget(self.gotoForceRadio)
-        modifyGotoSizer.addWidget(self.gotoPointRadio)
-        modifyGotoSizer.addWidget(self.gotoAllyRadio)
-        modifyGotoSizer.addWidget(self.gotoList)
+        modifySizer.addLayout(grid)
 
-        modifyBottomSizer = QHBoxLayout()
-        modifyBottomSizer.addLayout(modifyMiscSizer)
-        modifyBottomSizer.addLayout(modifyTargetSizer)
-        modifyBottomSizer.addLayout(modifyGotoSizer)
+        # --- View ---
+        viewGroup = QGroupBox("View")
+        viewSizer = QVBoxLayout(viewGroup)
+        viewSizer.setContentsMargins(1, 1, 1, 1)
+        viewSizer.setSpacing(2)
 
-        modifyMainSizer.addLayout(modifyBottomSizer)
+        self.mousePosLabel = QLabel("Mouse: (0,0)")
+        self.curZoomLabel = QLabel("Zoom: 100%")
+        self.curEditLabel = QLabel("Editing: Nothing")
 
-        modifySizer.addLayout(modifyAnimSizer)
-        modifySizer.addLayout(modifyMainSizer)
+        self.zoomSlider = QSlider(Qt.Horizontal)
+        self.zoomSlider.setRange(0, 8)
+        self.zoomSlider.setValue(4)
 
-        # ================================
-        # --- Battle properties (tabs) ---
-        # ================================
+        self.dispBlocksCheck = QCheckBox("Blocks")
+        self.dispBlocksCheck.setChecked(True)
+        self.dispFlagsCheck = QCheckBox("Flags")
+        self.dispFlagsCheck.setChecked(True)
+        self.dispGridCheck = QCheckBox("Grid")
+        self.dispGridCheck.setChecked(True)
+        self.topCheck = QCheckBox("Always on top")
+        self.dragCheck = QCheckBox("Alt drag mode")
+
+        viewSizer.addWidget(self.mousePosLabel)
+        viewSizer.addWidget(self.curZoomLabel)
+        viewSizer.addWidget(self.curEditLabel)
+        viewSizer.addWidget(QLabel("Zoom:"))
+        viewSizer.addWidget(self.zoomSlider)
+        viewSizer.addWidget(QLabel("Display:"))
+        viewSizer.addWidget(self.dispBlocksCheck)
+        viewSizer.addWidget(self.dispFlagsCheck)
+        viewSizer.addWidget(self.dispGridCheck)
+        viewSizer.addWidget(self.topCheck)
+        viewSizer.addWidget(self.dragCheck)
+
+        # --- Сборка левой панели ---
+        leftLayout.addWidget(entitiesGroup)
+        leftLayout.addWidget(modifyGroup)
+        leftLayout.addWidget(viewGroup)
+        leftLayout.addStretch()
+
+        # --- Battle properties (вкладки) ---
         battleGroup = QGroupBox("Battle Properties")
         battleLayout = QVBoxLayout(battleGroup)
+        battleLayout.setContentsMargins(1, 1, 1, 1)
+        battleLayout.setSpacing(1)
 
         self.battleNotebook = QTabWidget()
+        self.battleNotebook.setFixedHeight(180)
 
-        genWindow = QWidget()
-        mapWindow = QWidget()
-        zoneWindow = QWidget()
-        terrainWindow = QWidget()
+        genWindow = QWidget(); genWndSizer = QVBoxLayout(genWindow); genWndSizer.setContentsMargins(1,1,1,1)
+        mapWindow = QWidget(); mapWndSizer = QVBoxLayout(mapWindow); mapWndSizer.setContentsMargins(1,1,1,1)
+        zoneWindow = QWidget(); zoneWndSizer = QVBoxLayout(zoneWindow); zoneWndSizer.setContentsMargins(1,1,1,1)
+        terrainWindow = QWidget(); terrainWndSizer = QVBoxLayout(terrainWindow); terrainWndSizer.setContentsMargins(1,1,1,1)
 
-        genWndSizer = QVBoxLayout(genWindow)
-        mapWndSizer = QVBoxLayout(mapWindow)
-        zoneWndSizer = QVBoxLayout(zoneWindow)
-        terrainWndSizer = QVBoxLayout(terrainWindow)
-
-        # --- General tab ---
-        winCondText = QLabel("Win Condition")
-        battleGfxText = QLabel("Battle Graphics")
-        self.winAllRadio = QRadioButton(" All enemies")
-        self.winBossRadio = QRadioButton(" First enemy (boss)")
-        self.winCustomRadio = QRadioButton(" Custom condition")
-        self.winAllRadio.setChecked(True)
-        self.defaultBattleGfxRadio = QRadioButton(" Based on terrain")
-        self.overrideBattleGfxRadio = QRadioButton(" Use one set for all tiles")
-        self.defaultBattleGfxRadio.setChecked(True)
-        self.battleGfxList = QComboBox()
-
-        winLeft = QVBoxLayout()
-        winLeft.addWidget(winCondText)
-        winLeft.addWidget(self.winAllRadio)
-        winLeft.addWidget(self.winBossRadio)
-        winLeft.addWidget(self.winCustomRadio)
-        winRight = QVBoxLayout()
-        winRight.addWidget(battleGfxText)
-        winRight.addWidget(self.defaultBattleGfxRadio)
-        winRight.addWidget(self.overrideBattleGfxRadio)
-        winRight.addWidget(self.battleGfxList)
+        # General tab
         winSizer = QHBoxLayout()
-        winSizer.addLayout(winLeft)
-        winSizer.addLayout(winRight)
+        winLeft = QVBoxLayout(); winLeft.setSpacing(1)
+        winLeft.addWidget(QLabel("Win Condition"))
+        self.winAllRadio = QRadioButton("All enemies"); self.winAllRadio.setChecked(True)
+        self.winBossRadio = QRadioButton("Boss")
+        self.winCustomRadio = QRadioButton("Custom")
+        winLeft.addWidget(self.winAllRadio); winLeft.addWidget(self.winBossRadio); winLeft.addWidget(self.winCustomRadio)
+        winRight = QVBoxLayout(); winRight.setSpacing(1)
+        winRight.addWidget(QLabel("Graphics"))
+        self.defaultBattleGfxRadio = QRadioButton("Default"); self.defaultBattleGfxRadio.setChecked(True)
+        self.overrideBattleGfxRadio = QRadioButton("Override")
+        self.battleGfxList = QComboBox(); self.battleGfxList.setEnabled(False)
+        winRight.addWidget(self.defaultBattleGfxRadio); winRight.addWidget(self.overrideBattleGfxRadio); winRight.addWidget(self.battleGfxList)
+        winSizer.addLayout(winLeft); winSizer.addLayout(winRight)
+        genWndSizer.addLayout(winSizer)
 
-        genPropText = QLabel("Other Properties")
-        self.propRepeatableCheck = QCheckBox(" Battle is repeatable by entering retrigger region")
-        self.propMandatoryCheck = QCheckBox(" Completion of battle not dependent upon outcome")
-        self.propHalfEXPCheck = QCheckBox(" Enemies give half EXP")
-        propSizer = QVBoxLayout()
-        propSizer.addWidget(genPropText)
-        propSizer.addWidget(self.propRepeatableCheck)
-        propSizer.addWidget(self.propMandatoryCheck)
-        propSizer.addWidget(self.propHalfEXPCheck)
+        propSizer = QHBoxLayout()
+        self.propRepeatableCheck = QCheckBox("Repeatable")
+        self.propMandatoryCheck = QCheckBox("Mandatory")
+        self.propHalfEXPCheck = QCheckBox("Half EXP")
+        propSizer.addWidget(self.propRepeatableCheck); propSizer.addWidget(self.propMandatoryCheck); propSizer.addWidget(self.propHalfEXPCheck)
+        genWndSizer.addLayout(propSizer)
 
-        cutsceneText = QLabel("Cutscenes")
+        cutSizer = QHBoxLayout()
+        cutSizer.addWidget(QLabel("Cutscenes:"))
         self.cutsceneBeforeList = QComboBox()
         self.cutsceneAfterList = QComboBox()
-        cutSizer = QVBoxLayout()
-        cutSizer.addWidget(cutsceneText)
-        cutGrid = QGridLayout()
-        cutGrid.addWidget(QLabel("Before"), 0, 0)
-        cutGrid.addWidget(self.cutsceneBeforeList, 0, 1)
-        cutGrid.addWidget(QLabel("After"), 1, 0)
-        cutGrid.addWidget(self.cutsceneAfterList, 1, 1)
-        cutSizer.addLayout(cutGrid)
-
-        genWndSizer.addLayout(winSizer)
-        genWndSizer.addLayout(propSizer)
+        cutSizer.addWidget(QLabel("Before")); cutSizer.addWidget(self.cutsceneBeforeList)
+        cutSizer.addWidget(QLabel("After")); cutSizer.addWidget(self.cutsceneAfterList)
         genWndSizer.addLayout(cutSizer)
 
-        # --- Map tab ---
-        mapText = QLabel("Map")
-        self.mapList = QComboBox()
-        self.mapList.addItems([s.name for s in self.rom.data["maps"]])
-        self.mapList.setCurrentIndex(self.curBattle.map_index)
+        # Map tab
         mapSizer = QHBoxLayout()
-        mapSizer.addWidget(mapText)
+        mapSizer.addWidget(QLabel("Map:"))
+        self.mapList = QComboBox(); self.mapList.addItems([s.name for s in self.rom.data["maps"]])
+        self.mapList.setCurrentIndex(self.curBattle.map_index)
         mapSizer.addWidget(self.mapList)
-
-        boundsText = QLabel("Camera Bounds")
-        self.boundsXCtrl = QSpinBox(); self.boundsXCtrl.setMaximum(47)
-        self.boundsYCtrl = QSpinBox(); self.boundsYCtrl.setMaximum(47)
-        self.boundsX2Ctrl = QSpinBox(); self.boundsX2Ctrl.setMaximum(47)
-        self.boundsY2Ctrl = QSpinBox(); self.boundsY2Ctrl.setMaximum(47)
-        triggerXCtrl = QSpinBox(); triggerXCtrl.setMaximum(47); triggerXCtrl.setEnabled(False)
-        triggerYCtrl = QSpinBox(); triggerYCtrl.setMaximum(47); triggerYCtrl.setEnabled(False)
-        triggerX2Ctrl = QSpinBox(); triggerX2Ctrl.setMaximum(47); triggerX2Ctrl.setEnabled(False)
-        triggerY2Ctrl = QSpinBox(); triggerY2Ctrl.setMaximum(47); triggerY2Ctrl.setEnabled(False)
-
-        coordGrid1 = QGridLayout()
-        coordGrid1.addWidget(QLabel("X1"), 0, 0)
-        coordGrid1.addWidget(self.boundsXCtrl, 0, 1)
-        coordGrid1.addWidget(QLabel("Y1"), 1, 0)
-        coordGrid1.addWidget(self.boundsYCtrl, 1, 1)
-        coordGrid1.addWidget(QLabel("X2"), 0, 2)
-        coordGrid1.addWidget(self.boundsX2Ctrl, 0, 3)
-        coordGrid1.addWidget(QLabel("Y2"), 1, 2)
-        coordGrid1.addWidget(self.boundsY2Ctrl, 1, 3)
-
-        coordGrid2 = QGridLayout()
-        coordGrid2.addWidget(QLabel("X1"), 0, 0)
-        coordGrid2.addWidget(triggerXCtrl, 0, 1)
-        coordGrid2.addWidget(QLabel("Y1"), 1, 0)
-        coordGrid2.addWidget(triggerYCtrl, 1, 1)
-        coordGrid2.addWidget(QLabel("X2"), 0, 2)
-        coordGrid2.addWidget(triggerX2Ctrl, 0, 3)
-        coordGrid2.addWidget(QLabel("Y2"), 1, 2)
-        coordGrid2.addWidget(triggerY2Ctrl, 1, 3)
-
-        coordCol1 = QVBoxLayout()
-        coordCol1.addWidget(boundsText)
-        coordCol1.addLayout(coordGrid1)
-        coordCol2 = QVBoxLayout()
-        coordCol2.addWidget(QLabel("Retrigger Region"))
-        coordCol2.addLayout(coordGrid2)
-
-        coordSizer = QHBoxLayout()
-        coordSizer.addLayout(coordCol1)
-        coordSizer.addLayout(coordCol2)
-
         mapWndSizer.addLayout(mapSizer)
-        mapWndSizer.addLayout(coordSizer)
 
-        # --- AI Zones tab ---
-        self.regionList = QComboBox()
-        self.pointList = QComboBox()
-        self.regionType1Radio = QRadioButton(" Type 1")
-        self.regionType2Radio = QRadioButton(" Type 2")
-        self.regionType1Radio.setChecked(True)
-        self.addRegionButton = QPushButton("New Region"); self.addRegionButton.setEnabled(False)
-        self.deleteRegionButton = QPushButton("Delete"); self.deleteRegionButton.setEnabled(False)
-        self.addPointButton = QPushButton("New Point"); self.addPointButton.setEnabled(False)
-        self.deletePointButton = QPushButton("Delete"); self.deletePointButton.setEnabled(False)
+        boundsSizer = QHBoxLayout()
+        boundsSizer.addWidget(QLabel("Cam X1/Y1"))
+        self.boundsXCtrl = QSpinBox(); self.boundsXCtrl.setMaximum(47); self.boundsXCtrl.setFixedWidth(40)
+        self.boundsYCtrl = QSpinBox(); self.boundsYCtrl.setMaximum(47); self.boundsYCtrl.setFixedWidth(40)
+        boundsSizer.addWidget(self.boundsXCtrl); boundsSizer.addWidget(self.boundsYCtrl)
+        boundsSizer.addWidget(QLabel("X2/Y2"))
+        self.boundsX2Ctrl = QSpinBox(); self.boundsX2Ctrl.setMaximum(47); self.boundsX2Ctrl.setFixedWidth(40)
+        self.boundsY2Ctrl = QSpinBox(); self.boundsY2Ctrl.setMaximum(47); self.boundsY2Ctrl.setFixedWidth(40)
+        boundsSizer.addWidget(self.boundsX2Ctrl); boundsSizer.addWidget(self.boundsY2Ctrl)
+        boundsSizer.addStretch()
+        mapWndSizer.addLayout(boundsSizer)
 
-        self.regionXCtrl = QSpinBox(); self.regionXCtrl.setMaximum(47)
-        self.regionYCtrl = QSpinBox(); self.regionYCtrl.setMaximum(47)
-        self.regionX2Ctrl = QSpinBox(); self.regionX2Ctrl.setMaximum(47)
-        self.regionY2Ctrl = QSpinBox(); self.regionY2Ctrl.setMaximum(47)
-        self.regionX3Ctrl = QSpinBox(); self.regionX3Ctrl.setMaximum(47)
-        self.regionY3Ctrl = QSpinBox(); self.regionY3Ctrl.setMaximum(47)
-        self.regionX4Ctrl = QSpinBox(); self.regionX4Ctrl.setMaximum(47)
-        self.regionY4Ctrl = QSpinBox(); self.regionY4Ctrl.setMaximum(47)
+        # AI Zones tab
+        zoneLayout = QHBoxLayout()
+        regionBox = QVBoxLayout(); regionBox.setSpacing(1)
+        regionBox.addWidget(QLabel("Regions"))
+        self.regionList = QComboBox(); self.regionList.setFixedWidth(100)
+        regionBox.addWidget(self.regionList)
+        self.regionType1Radio = QRadioButton("Type 1"); self.regionType1Radio.setChecked(True)
+        self.regionType2Radio = QRadioButton("Type 2")
+        regionBox.addWidget(self.regionType1Radio); regionBox.addWidget(self.regionType2Radio)
 
-        self.pointXCtrl = QSpinBox(); self.pointXCtrl.setMaximum(47)
-        self.pointYCtrl = QSpinBox(); self.pointYCtrl.setMaximum(47)
+        pointBox = QVBoxLayout(); pointBox.setSpacing(1)
+        pointBox.addWidget(QLabel("Points"))
+        self.pointList = QComboBox(); self.pointList.setFixedWidth(80)
+        pointBox.addWidget(self.pointList)
 
-        regionGrid = QGridLayout()
-        regionGrid.addWidget(QLabel("X1"), 0, 0); regionGrid.addWidget(self.regionXCtrl, 0, 1)
-        regionGrid.addWidget(QLabel("Y1"), 1, 0); regionGrid.addWidget(self.regionYCtrl, 1, 1)
-        regionGrid.addWidget(QLabel("X2"), 2, 0); regionGrid.addWidget(self.regionX2Ctrl, 2, 1)
-        regionGrid.addWidget(QLabel("Y2"), 3, 0); regionGrid.addWidget(self.regionY2Ctrl, 3, 1)
-        regionGrid.addWidget(QLabel("X3"), 2, 2); regionGrid.addWidget(self.regionX3Ctrl, 2, 3)
-        regionGrid.addWidget(QLabel("Y3"), 3, 2); regionGrid.addWidget(self.regionY3Ctrl, 3, 3)
-        regionGrid.addWidget(QLabel("X4"), 0, 2); regionGrid.addWidget(self.regionX4Ctrl, 0, 3)
-        regionGrid.addWidget(QLabel("Y4"), 1, 2); regionGrid.addWidget(self.regionY4Ctrl, 1, 3)
+        coordGrid = QGridLayout(); coordGrid.setSpacing(1)
+        self.regionXCtrl = QSpinBox(); self.regionXCtrl.setMaximum(47); self.regionXCtrl.setFixedWidth(45)
+        self.regionYCtrl = QSpinBox(); self.regionYCtrl.setMaximum(47); self.regionYCtrl.setFixedWidth(45)
+        self.regionX2Ctrl = QSpinBox(); self.regionX2Ctrl.setMaximum(47); self.regionX2Ctrl.setFixedWidth(45)
+        self.regionY2Ctrl = QSpinBox(); self.regionY2Ctrl.setMaximum(47); self.regionY2Ctrl.setFixedWidth(45)
+        self.regionX3Ctrl = QSpinBox(); self.regionX3Ctrl.setMaximum(47); self.regionX3Ctrl.setFixedWidth(45)
+        self.regionY3Ctrl = QSpinBox(); self.regionY3Ctrl.setMaximum(47); self.regionY3Ctrl.setFixedWidth(45)
+        self.regionX4Ctrl = QSpinBox(); self.regionX4Ctrl.setMaximum(47); self.regionX4Ctrl.setFixedWidth(45)
+        self.regionY4Ctrl = QSpinBox(); self.regionY4Ctrl.setMaximum(47); self.regionY4Ctrl.setFixedWidth(45)
+        self.pointXCtrl = QSpinBox(); self.pointXCtrl.setMaximum(47); self.pointXCtrl.setFixedWidth(45)
+        self.pointYCtrl = QSpinBox(); self.pointYCtrl.setMaximum(47); self.pointYCtrl.setFixedWidth(45)
 
-        pointGrid = QGridLayout()
-        pointGrid.addWidget(QLabel("X"), 0, 0); pointGrid.addWidget(self.pointXCtrl, 0, 1)
-        pointGrid.addWidget(QLabel("Y"), 1, 0); pointGrid.addWidget(self.pointYCtrl, 1, 1)
+        coordGrid.addWidget(QLabel("X1"),0,0); coordGrid.addWidget(self.regionXCtrl,0,1)
+        coordGrid.addWidget(QLabel("Y1"),1,0); coordGrid.addWidget(self.regionYCtrl,1,1)
+        coordGrid.addWidget(QLabel("X2"),2,0); coordGrid.addWidget(self.regionX2Ctrl,2,1)
+        coordGrid.addWidget(QLabel("Y2"),3,0); coordGrid.addWidget(self.regionY2Ctrl,3,1)
+        coordGrid.addWidget(QLabel("X3"),2,2); coordGrid.addWidget(self.regionX3Ctrl,2,3)
+        coordGrid.addWidget(QLabel("Y3"),3,2); coordGrid.addWidget(self.regionY3Ctrl,3,3)
+        coordGrid.addWidget(QLabel("X4"),0,2); coordGrid.addWidget(self.regionX4Ctrl,0,3)
+        coordGrid.addWidget(QLabel("Y4"),1,2); coordGrid.addWidget(self.regionY4Ctrl,1,3)
+        coordGrid.addWidget(QLabel("Pt X"),4,0); coordGrid.addWidget(self.pointXCtrl,4,1)
+        coordGrid.addWidget(QLabel("Pt Y"),4,2); coordGrid.addWidget(self.pointYCtrl,4,3)
 
-        regionSizer = QVBoxLayout()
-        regionSizer.addWidget(QLabel("Regions"))
-        regionSizer.addWidget(self.regionList)
-        regionSizer.addWidget(self.regionType1Radio)
-        regionSizer.addWidget(self.regionType2Radio)
-        regionSizer.addLayout(regionGrid)
+        zoneLayout.addLayout(regionBox); zoneLayout.addLayout(pointBox); zoneLayout.addLayout(coordGrid)
+        zoneWndSizer.addLayout(zoneLayout)
 
-        pointSizer = QVBoxLayout()
-        pointSizer.addWidget(QLabel("Points"))
-        pointSizer.addWidget(self.pointList)
-        pointSizer.addLayout(pointGrid)
+        # Terrain tab
+        terrainMain = QHBoxLayout()
+        leftTerrain = QVBoxLayout(); leftTerrain.setSpacing(2)
+        leftTerrain.addWidget(QLabel("^ Click"))
+        bmpWidget = QWidget()
+        bmpLayout = QHBoxLayout(bmpWidget); bmpLayout.setSpacing(0)
+        self.terrainIconBtns = []
+        terraintypes = ["Low Sky", "Plains", "Road", "Grass", "Forest", "Hill", "Desert", "High Sky", "Water", "Inaccessible"]
+        for i, icon in enumerate(btn_icons):
+            btn = QPushButton()
+            btn.setIcon(icon)
+            btn.setFixedSize(28, 28)
+            btn.setToolTip(terraintypes[i])
+            btn.setProperty("context", i)
+            btn.clicked.connect(self.OnSelectTerrainType)
+            bmpLayout.addWidget(btn)
+            self.terrainIconBtns.append(btn)
+        leftTerrain.addWidget(bmpWidget)
+        self.curTerrainBmp = QLabel()
+        self.curTerrainBmp.setPixmap(icons[0])
+        self.curTerrainBmp.setFixedSize(24, 24)
+        leftTerrain.addWidget(QLabel("Current:"))
+        leftTerrain.addWidget(self.curTerrainBmp)
 
-        zoneSizer = QHBoxLayout()
-        zoneSizer.addLayout(regionSizer)
-        zoneSizer.addLayout(pointSizer)
-
-        zoneWndSizer.addLayout(zoneSizer)
-
-        # --- Terrain tab ---
         diffColors = [QColor(255,255,255), QColor(192,255,192), QColor(128,255,128),
                       QColor(255,255,128), QColor(255,192,128), QColor(255,128,128),
                       QColor(240,112,112), QColor(224,96,96), QColor(208,80,80),
@@ -406,9 +386,9 @@ class BattlePanel(rompanel.ROMPanel):
         self.terrainInfoGrid = QTableWidget(13, 9)
         self.terrainInfoGrid.horizontalHeader().setVisible(False)
         self.terrainInfoGrid.verticalHeader().setVisible(False)
-        self.terrainInfoGrid.setFixedSize(340, 400)
-        movetypes = ["Free", "Foot", "Horse", "Fast", "Tires", "Fly", "Float", "Water", "Foot2", "Horse2", "Fast2", "Foot3", "Foot4"]
-        terraintypes = ["Low Sky", "Plains", "Road", "Grass", "Forest", "Hill", "Desert", "High Sky", "Water", "Inaccessible"]
+        self.terrainInfoGrid.setFixedSize(250, 280)
+        movetypes = ["Free", "Foot", "Horse", "Fast", "Tires", "Fly", "Float", "Water",
+                     "Foot2", "Horse2", "Fast2", "Foot3", "Foot4"]
         for i in range(13):
             self.terrainInfoGrid.setVerticalHeaderItem(i, QTableWidgetItem(movetypes[i]))
         for i in range(9):
@@ -423,79 +403,59 @@ class BattlePanel(rompanel.ROMPanel):
                 cell.setTextAlignment(Qt.AlignCenter)
                 self.terrainInfoGrid.setItem(y, x, cell)
 
-        bmpWidget = QWidget()
-        bmpLayout = QHBoxLayout(bmpWidget)
-        self.terrainIconBtns = []
-        for i, icon in enumerate(btn_icons):
-            btn = QPushButton()
-            btn.setIcon(icon)
-            btn.setToolTip(terraintypes[i])
-            btn.setProperty("context", i)
-            btn.clicked.connect(self.OnSelectTerrainType)
-            bmpLayout.addWidget(btn)
-            self.terrainIconBtns.append(btn)
-        self.curTerrainBmp = QLabel()
-        self.curTerrainBmp.setPixmap(icons[0])
-        self.curTerrainType = 0
+        terrainMain.addLayout(leftTerrain)
+        terrainMain.addWidget(self.terrainInfoGrid)
+        terrainWndSizer.addLayout(terrainMain)
 
-        terrainSizer = QVBoxLayout()
-        terrainSizer.addWidget(QLabel("^ Click"))
-        terrainSizer.addWidget(bmpWidget)
-        terrainSizer.addWidget(QLabel("Current:"))
-        terrainSizer.addWidget(self.curTerrainBmp)
-        terrainSizer.addWidget(self.terrainInfoGrid)
-
-        terrainWndSizer.addLayout(terrainSizer)
+        self.battleNotebook.addTab(genWindow, "General")
+        self.battleNotebook.addTab(mapWindow, "Map")
+        self.battleNotebook.addTab(zoneWindow, "AI")
+        self.battleNotebook.addTab(terrainWindow, "Terrain")
+        battleLayout.addWidget(self.battleNotebook)
 
         # Map viewer
         self.mapViewer = window.BattleMapViewer(self, None, self)
         self.mapViewer.init(None, None)
         self.mapViewer.mapViewPanel.drawFlags = False
 
-        self.battleNotebook.addTab(genWindow, "General")
-        self.battleNotebook.addTab(mapWindow, "Map")
-        self.battleNotebook.addTab(zoneWindow, "AI Zones")
-        self.battleNotebook.addTab(terrainWindow, "Terrain")
-        battleLayout.addWidget(self.battleNotebook)
+        self.mapViewer.mapViewPanel.setMinimumSize(0, 0)
+        self.mapViewer.mapViewPanel.setMaximumSize(16777215, 16777215)
+        self.mapViewer.mapViewPanel.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        if hasattr(self.mapViewer, 'mainPanel'):
+            self.mapViewer.mainPanel.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
 
-        # =======================
-        # --- Main layout ---
-        # =======================
-        # Добавляем виджеты
-        self.sizer.addWidget(entitiesGroup, 0, 0, 2, 1)
-        self.sizer.addWidget(modifyGroup, 0, 1, 2, 1)
-        self.sizer.addWidget(battleGroup, 2, 0, 1, 2)
-        self.sizer.addWidget(self.mapViewer, 0, 2, 3, 1)
+        # Связываем View-элементы
+        self.zoomSlider.valueChanged.connect(self.mapViewer.changeZoom)
+        self.dispBlocksCheck.stateChanged.connect(
+            lambda state: setattr(self.mapViewer.mapViewPanel, 'drawBlocks', state == Qt.Checked))
+        self.dispFlagsCheck.stateChanged.connect(
+            lambda state: setattr(self.mapViewer.mapViewPanel, 'drawFlags', state == Qt.Checked))
+        self.dispGridCheck.stateChanged.connect(self.mapViewer.OnToggleGridCheck)
+        self.topCheck.stateChanged.connect(self.mapViewer.OnToggleTopCheck)
 
-        # Левые панели: могут сжиматься, но не бесконечно
-        entitiesGroup.setMaximumWidth(250)
-        modifyGroup.setMaximumWidth(420)
-        entitiesGroup.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Preferred)
-        modifyGroup.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Preferred)
+        # --- Главный лейаут ---
+        self.sizer.addWidget(leftPanel,       0, 0, 2, 1)
+        self.sizer.addWidget(battleGroup,     2, 0, 1, 1)
+        self.sizer.addWidget(self.mapViewer,  0, 1, 3, 1)
 
-        # Карта: агрессивно расширяется по всем направлениям
-        self.mapViewer.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        leftPanel.setFixedWidth(220)
+        battleGroup.setMaximumHeight(190)
 
-        # Растягиваем колонку с картой (индекс 2)
         self.sizer.setColumnStretch(0, 0)
-        self.sizer.setColumnStretch(1, 0)
-        self.sizer.setColumnStretch(2, 1)
+        self.sizer.setColumnStretch(1, 1)
 
-        # Растягиваем строки, в которых находится карта
         self.sizer.setRowStretch(0, 1)
         self.sizer.setRowStretch(1, 1)
         self.sizer.setRowStretch(2, 0)
 
-        # Минимальные размеры окна
-        self.setMinimumWidth(900)
-        self.setMinimumHeight(600)
+        self.sizer.setContentsMargins(1, 1, 1, 1)
+        self.sizer.setSpacing(1)
 
-        # Принудительно даём самой панели заполнять всё доступное место
+        self.setMinimumWidth(1024)
+        self.setMinimumHeight(680)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        
-        # =======================
-        # --- Connections ---
-        # =======================
+
+        # Connections
         self.battleNotebook.currentChanged.connect(self.OnChangePage)
         self.addMonsterButton.clicked.connect(self.OnAddMonsterButton)
         self.addForceButton.clicked.connect(self.OnAddForceButton)
@@ -547,10 +507,9 @@ class BattlePanel(rompanel.ROMPanel):
 
         self.printed = False
 
-    # ========== Вспомогательные методы ==========
+    # ========== Все методы класса (без изменений) ==========
     def OnShow(self, event=None):
         pass
-           
 
     def OnSelectBattle(self, idx):
         self.changeBattle(idx)
@@ -689,8 +648,7 @@ class BattlePanel(rompanel.ROMPanel):
             self.modify()
 
     def OnSelectGotoEntry(self, idx):
-        if idx < 0:
-            return
+        if idx < 0: return
         type_ = int(self.curUnit.ai[self.curOrderSet + 1][0] / 64)
         if type_ == 2 and idx >= self.curUnitIdx:
             idx += 1
@@ -781,90 +739,70 @@ class BattlePanel(rompanel.ROMPanel):
             self.curBattle.regions[self.curRegionIdx].type = 3
             self.modify()
 
-    def OnChangeRegionX(self, val):
-        self.changeRegionX(val)
-
+    def OnChangeRegionX(self, val): self.changeRegionX(val)
     def changeRegionX(self, num):
         self.curBattle.regions[self.curRegionIdx].p1[0] = num
         self.regionXCtrl.setValue(num)
         self.modify()
         self.mapViewer.refreshMapView()
 
-    def OnChangeRegionY(self, val):
-        self.changeRegionY(val)
-
+    def OnChangeRegionY(self, val): self.changeRegionY(val)
     def changeRegionY(self, num):
         self.curBattle.regions[self.curRegionIdx].p1[1] = num
         self.regionYCtrl.setValue(num)
         self.modify()
         self.mapViewer.refreshMapView()
 
-    def OnChangeRegionX2(self, val):
-        self.changeRegionX2(val)
-
+    def OnChangeRegionX2(self, val): self.changeRegionX2(val)
     def changeRegionX2(self, num):
         self.curBattle.regions[self.curRegionIdx].p2[0] = num
         self.regionX2Ctrl.setValue(num)
         self.modify()
         self.mapViewer.refreshMapView()
 
-    def OnChangeRegionY2(self, val):
-        self.changeRegionY2(val)
-
+    def OnChangeRegionY2(self, val): self.changeRegionY2(val)
     def changeRegionY2(self, num):
         self.curBattle.regions[self.curRegionIdx].p2[1] = num
         self.regionY2Ctrl.setValue(num)
         self.modify()
         self.mapViewer.refreshMapView()
 
-    def OnChangeRegionX3(self, val):
-        self.changeRegionX3(val)
-
+    def OnChangeRegionX3(self, val): self.changeRegionX3(val)
     def changeRegionX3(self, num):
         self.curBattle.regions[self.curRegionIdx].p3[0] = num
         self.regionX3Ctrl.setValue(num)
         self.modify()
         self.mapViewer.refreshMapView()
 
-    def OnChangeRegionY3(self, val):
-        self.changeRegionY3(val)
-
+    def OnChangeRegionY3(self, val): self.changeRegionY3(val)
     def changeRegionY3(self, num):
         self.curBattle.regions[self.curRegionIdx].p3[1] = num
         self.regionY3Ctrl.setValue(num)
         self.modify()
         self.mapViewer.refreshMapView()
 
-    def OnChangeRegionX4(self, val):
-        self.changeRegionX4(val)
-
+    def OnChangeRegionX4(self, val): self.changeRegionX4(val)
     def changeRegionX4(self, num):
         self.curBattle.regions[self.curRegionIdx].p4[0] = num
         self.regionX4Ctrl.setValue(num)
         self.modify()
         self.mapViewer.refreshMapView()
 
-    def OnChangeRegionY4(self, val):
-        self.changeRegionY4(val)
-
+    def OnChangeRegionY4(self, val): self.changeRegionY4(val)
     def changeRegionY4(self, num):
         self.curBattle.regions[self.curRegionIdx].p4[1] = num
         self.regionY4Ctrl.setValue(num)
         self.modify()
         self.mapViewer.refreshMapView()
 
-    def OnChangePointX(self, val):
-        self.changePointX(val)
-
+    def OnChangePointX(self, val): self.changePointX(val)
     def changePointX(self, num):
         self.curBattle.points[self.curPointIdx][0] = num
         self.pointYCtrl.setValue(num)
         self.modify()
         self.mapViewer.refreshMapView()
 
-    def OnChangePointY(self, val):
-        self.changePointY(val)
-
+    def OnChangePointY(self, val): self.changePointY(val)
     def changePointY(self, num):
         self.curBattle.points[self.curPointIdx][1] = num
         self.pointYCtrl.setValue(num)
