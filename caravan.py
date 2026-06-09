@@ -339,7 +339,11 @@ class MainFrame(window.CaravanParentFrame):
         datadlg.deleteLater()
 
     def OnSave(self):
-        self.saveFile()
+        try:
+            self.saveFile()
+        except Exception:
+            import traceback
+            QMessageBox.critical(self, "Save Error", traceback.format_exc())
 
     def OnSaveAs(self):
         dlg = QFileDialog(self, "Save Shining Force 2 ROM (.BIN) As", "", "*.bin")
@@ -416,140 +420,191 @@ class MainFrame(window.CaravanParentFrame):
         self.addDockWidget(Qt.LeftDockWidgetArea, dock)
 
     def saveFile(self, path=""):
-        gen = self.rom.writeAllData()
-        texts, pieces = next(gen)
-
-        dlg = QDialog(self)
-        dlg.setWindowTitle("Saving...")
-        dlg.setFixedSize(350, 280)
-        dlg.setWindowIcon(icon)
-        dlg.setWindowModality(Qt.ApplicationModal)
-
-        dlgSizer = QVBoxLayout(dlg)
-        dlgMainSizer = QVBoxLayout()
-        dlgText1Sizer = QHBoxLayout()
-        dlgText2Sizer = QHBoxLayout()
-
-        dlgSubSavingText = QLabel("Saving...")
-        dlgSubSavingText.setFont(self.subFont)
-        dlgSubPercentText = QLabel("0%")
-        dlgSubPercentText.setFont(self.headerFont)
-        dlgSubPercentText.setAlignment(Qt.AlignRight)
-
-        dlgText1Sizer.addWidget(dlgSubSavingText)
-        dlgText1Sizer.addStretch()
-        dlgText1Sizer.addWidget(dlgSubPercentText)
-
-        dlgSubGauge = QProgressBar()
-        dlgSubGauge.setRange(0, 100)
-
-        dlgActionText = QLabel("")
-        dlgActionText.setFont(self.subFont)
-        dlgActionText.setAlignment(Qt.AlignCenter)
-
-        dlgSavingText = QLabel("")
-        dlgSavingText.setFont(self.subFont)
-        dlgPercentText = QLabel("0%")
-        dlgPercentText.setFont(self.headerFont)
-        dlgPercentText.setAlignment(Qt.AlignRight)
-
-        dlgText2Sizer.addWidget(dlgSavingText)
-        dlgText2Sizer.addStretch()
-        dlgText2Sizer.addWidget(dlgPercentText)
-
-        dlgGauge = QProgressBar()
-        dlgGauge.setRange(0, 100)
-
-        dlgCancelButton = QPushButton("Cancel")
-        dlgCancelButton.setFont(self.subFont)
-        dlgCancelButton.clicked.connect(self.cancelSaving)
-
-        dlgMainSizer.addLayout(dlgText2Sizer)
-        dlgMainSizer.addWidget(dlgGauge)
-        dlgMainSizer.addLayout(dlgText1Sizer)
-        dlgMainSizer.addWidget(dlgSubGauge)
-        dlgMainSizer.addWidget(dlgActionText)
-        dlgMainSizer.addWidget(dlgCancelButton, 0, Qt.AlignCenter)
-
-        dlgSizer.addLayout(dlgMainSizer)
-
-        dlgSubSavingText.setText("Saving %s..." % texts[0])
-        dlgSavingText.setText("Section %i of %i..." % (1, len(pieces)))
-        dlg.show()
-
-        sectionsToUpdate = list(filter(lambda a: a > 0, pieces))
-        if len(sectionsToUpdate) == 0:
-            percentPerPiece = 100.0
+        print("=== НАЧАЛО СОХРАНЕНИЯ ROM ===")
+        print(f"Файл: {self.filename}")
+        if path:
+            print(f"Сохраняем как: {path}")
         else:
-            percentPerPiece = 100.0 / len(sectionsToUpdate)
+            print(f"Сохраняем в: {pathjoin(self.dirname, self.filename)}")
+        
+        try:
+            gen = self.rom.writeAllData()
+            print("DEBUG: Генератор writeAllData() успешно создан")
 
-        succeeded = True
-        allPieces = 0
-        result = next(gen)
+            texts, pieces = next(gen)
+            print(f"DEBUG: Получено {len(texts)} секций")
+            print(f"DEBUG: pieces = {pieces}")
+            print(f"DEBUG: texts = {texts}")
 
-        for cur in range(len(pieces)):
-            curPiece = 0
-            pieceProgress = 0
-            dlgSubSavingText.setText("Saving %s..." % texts[cur])
-            dlgSavingText.setText("Section %i of %i..." % (cur+1, len(pieces)))
-            QApplication.processEvents()
-            if pieces[cur]:
-                percentPerEntry = 100.0 / pieces[cur]
-                while result is not None:
-                    if self.pendingCancel:
-                        break
-                    if result == "Moving on...":
-                        curPiece += 1
-                        allPieces += 1
-                        pieceProgress = 0
-                    elif isinstance(result, (float, int)):
-                        pieceProgress = result
-                    else:
-                        dlgActionText.setText(result)
-                    progressSub = percentPerEntry * curPiece + percentPerEntry * pieceProgress / 100
-                    progress = percentPerPiece * allPieces / 100.0 + progressSub * percentPerPiece / 100.0
-                    dlgSubGauge.setValue(int(progressSub))
-                    dlgSubPercentText.setText("%i%%" % int(progressSub))
-                    dlgGauge.setValue(int(progress))
-                    dlgPercentText.setText("%i%%" % int(progress))
-                    QApplication.processEvents()
-                    result = next(gen)
-            if self.pendingCancel:
-                break
+            # === Создание окна прогресса ===
+            dlg = QDialog(self)
+            dlg.setWindowTitle("Saving...")
+            dlg.setFixedSize(350, 280)
+            dlg.setWindowIcon(icon)
+            dlg.setWindowModality(Qt.ApplicationModal)
+            
+            dlgSizer = QVBoxLayout(dlg)
+            dlgMainSizer = QVBoxLayout()
+            
+            dlgText1Sizer = QHBoxLayout()
+            dlgText2Sizer = QHBoxLayout()
+            
+            dlgSubSavingText = QLabel("Saving...")
+            dlgSubSavingText.setFont(self.subFont)
+            dlgSubPercentText = QLabel("0%")
+            dlgSubPercentText.setFont(self.headerFont)
+            dlgSubPercentText.setAlignment(Qt.AlignRight)
+            
+            dlgText1Sizer.addWidget(dlgSubSavingText)
+            dlgText1Sizer.addStretch()
+            dlgText1Sizer.addWidget(dlgSubPercentText)
+            
+            dlgSubGauge = QProgressBar()
+            dlgSubGauge.setRange(0, 100)
+            
+            dlgActionText = QLabel("")
+            dlgActionText.setFont(self.subFont)
+            dlgActionText.setAlignment(Qt.AlignCenter)
+            
+            dlgSavingText = QLabel("")
+            dlgSavingText.setFont(self.subFont)
+            dlgSavingText.setAlignment(Qt.AlignCenter)
+            
+            dlgPercentText = QLabel("0%")
+            dlgPercentText.setFont(self.headerFont)
+            dlgPercentText.setAlignment(Qt.AlignRight)
+            
+            dlgText2Sizer.addWidget(dlgSavingText)
+            dlgText2Sizer.addStretch()
+            dlgText2Sizer.addWidget(dlgPercentText)
+            
+            dlgGauge = QProgressBar()
+            dlgGauge.setRange(0, 100)
+            
+            dlgCancelButton = QPushButton("Cancel")
+            dlgCancelButton.setFont(self.subFont)
+            dlgCancelButton.clicked.connect(self.cancelSaving)
+            
+            dlgMainSizer.addLayout(dlgText2Sizer)
+            dlgMainSizer.addWidget(dlgGauge)
+            dlgMainSizer.addLayout(dlgText1Sizer)
+            dlgMainSizer.addWidget(dlgSubGauge)
+            dlgMainSizer.addWidget(dlgActionText)
+            dlgMainSizer.addWidget(dlgCancelButton, 0, Qt.AlignCenter)
+            
+            dlgSizer.addLayout(dlgMainSizer)
+            dlg.show()
 
-        dlg.setWindowModality(Qt.NonModal)
-        if not self.pendingCancel:
-            fileStr = next(gen)
-            dlgSubGauge.setValue(100)
-            dlgSubPercentText.setText("100%")
-            dlgGauge.setValue(100)
-            dlgPercentText.setText("100%")
-            dlgSubSavingText.setText("Done!")
-            dlgSavingText.setText("%i of %i sections saved properly." % (len(sectionsToUpdate), len(sectionsToUpdate)))
-            dlgActionText.setText("")
-            dlgCancelButton.setText("OK")
-
-            if path:
-                outfile = open(path, 'wb')
+            # Инициализация прогресса
+            sectionsToUpdate = list(filter(lambda a: a > 0, pieces))
+            if len(sectionsToUpdate) == 0:
+                percentPerPiece = 100.0
             else:
-                outfile = open(pathjoin(self.dirname, self.filename), 'wb')
-            outfile.write(fileStr)
-            outfile.flush()
-            outfile.close()
+                percentPerPiece = 100.0 / len(sectionsToUpdate)
+            
+            print(f"DEBUG: Активных секций для сохранения: {len(sectionsToUpdate)}")
+            
+            succeeded = True
+            allPieces = 0
+            result = next(gen)
 
-            self.modify(False)
-            self.rom.massModify(False)
-            QMessageBox.information(self, self.baseTitle, "File saved successfully.")
-            for i in self.layoutTree.allItems:
-                self.layoutTree.modify(i, False)
-        else:
-            succeeded = False
-            QMessageBox.warning(self, self.baseTitle, "Saving cancelled.")
+            for cur in range(len(pieces)):
+                print(f"\n--- Секция {cur+1}/{len(pieces)}: {texts[cur]} ---")
+                dlgSubSavingText.setText(f"Saving {texts[cur]}...")
+                dlgSavingText.setText(f"Section {cur+1} of {len(pieces)}...")
+                QApplication.processEvents()
 
-        self.pendingCancel = False
-        dlg.accept()
-        dlg.deleteLater()
-        return succeeded
+                if pieces[cur] > 0:
+                    percentPerEntry = 100.0 / pieces[cur]
+                    curPiece = 0
+                    pieceProgress = 0
+
+                    while result is not None:
+                        if self.pendingCancel:
+                            print("DEBUG: Сохранение отменено пользователем!")
+                            break
+                        
+                        try:
+                            result = next(gen)
+                        except Exception as e:
+                            print("ОШИБКА при вызове next(gen):")
+                            traceback.print_exc()
+                            raise
+
+                        if result is None:
+                            print("DEBUG: Генератор завершил текущую секцию")
+                            break
+                        elif result == "Moving on...":
+                            curPiece += 1
+                            allPieces += 1
+                            pieceProgress = 0
+                            print(f"  → Запись {curPiece}/{pieces[cur]} завершена")
+                        elif isinstance(result, (float, int)):
+                            pieceProgress = result
+                        else:
+                            print(f"  Сообщение от генератора: {result}")
+                            dlgActionText.setText(str(result))
+
+                        # Расчёт прогресса
+                        progressSub = percentPerEntry * curPiece + (percentPerEntry * pieceProgress / 100)
+                        progress = percentPerPiece * allPieces / 100.0 + progressSub * percentPerPiece / 100.0
+
+                        # Вывод в консоль
+                        if int(progressSub) % 10 == 0 or curPiece == 0 or curPiece == pieces[cur]-1:
+                            print(f"  Прогресс: {int(progressSub)}% (секция) | Общий: {int(progress)}%")
+
+                        dlgSubGauge.setValue(int(progressSub))
+                        dlgSubPercentText.setText(f"{int(progressSub)}%")
+                        dlgGauge.setValue(int(progress))
+                        dlgPercentText.setText(f"{int(progress)}%")
+                        
+                        QApplication.processEvents()
+
+                if self.pendingCancel:
+                    break
+
+            print("\n=== ЗАВЕРШЕНИЕ СОХРАНЕНИЯ ===")
+
+            if not self.pendingCancel and succeeded:
+                fileStr = next(gen)
+                print(f"DEBUG: Получен итоговый файл размером {len(fileStr):,} байт")
+
+                if path:
+                    outfile = open(path, 'wb')
+                else:
+                    outfile = open(pathjoin(self.dirname, self.filename), 'wb')
+                
+                outfile.write(fileStr)
+                outfile.flush()
+                outfile.close()
+                
+                print("Файл успешно записан на диск!")
+                
+                self.modify(False)
+                self.rom.massModify(False)
+                
+                for i in self.layoutTree.allItems:
+                    self.layoutTree.modify(i, False)
+                
+                QMessageBox.information(self, self.baseTitle, "File saved successfully.")
+            else:
+                print("Сохранение было отменено или завершилось неудачей.")
+                QMessageBox.warning(self, self.baseTitle, "Saving cancelled or failed.")
+
+            self.pendingCancel = False
+            dlg.accept()
+            dlg.deleteLater()
+            return succeeded
+
+        except Exception:
+            print("=== КРИТИЧЕСКАЯ ОШИБКА ПРИ СОХРАНЕНИИ ===")
+            traceback.print_exc()
+            err = traceback.format_exc()
+            with open("save_error.log", "w", encoding="utf-8") as f:
+                f.write(err)
+            QMessageBox.critical(self, "Save Error", 
+                               "Error occurred. Check save_error.log for details.\n\n" + err)
+            return False
 
     def cancelSaving(self):
         self.pendingCancel = True

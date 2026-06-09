@@ -554,27 +554,23 @@ class Sprite(DataObject):
                 pixels.append(tilerow)
         return pixels
 
-    def setPixel(self, x, y, col, frame=0):
-        tileX = x // 8
-        tileY = y // 8
-        tileWidth = self.width // 8
-        tileHeight = self.height // 8
-        if self.direction == "v":
-            ofs = tileHeight * 64 * tileX + tileY * 64 + (y % 8) * 8 + x % 8
-        else:
-            ofs = tileWidth * 64 * tileY + tileX * 64 + (y % 8) * 8 + x % 8
-        if frame:
-            self.pixels2[y] = self.pixels2[y][:x] + col + self.pixels2[y][x+1:]
-            self.raw_pixels2 = self.raw_pixels2[:ofs] + col + self.raw_pixels2[ofs+1:]
-        else:
-            self.pixels[y] = self.pixels[y][:x] + col + self.pixels[y][x+1:]
-            self.raw_pixels = self.raw_pixels[:ofs] + col + self.raw_pixels[ofs+1:]
-
     def hexlify(self, debug=False, **kwargs):
-        pixels = self.raw_pixels + self.raw_pixels2
+        # ФИКС ДЛЯ ВТОРОГО КАДРА
+        if not hasattr(self, 'raw_pixels') or self.raw_pixels is None:
+            self.raw_pixels = ""
+        if not hasattr(self, 'raw_pixels2') or self.raw_pixels2 is None:
+            self.raw_pixels2 = ""
+
+        # Правильно соединяем оба кадра
+        frame1 = "".join(self.raw_pixels) if isinstance(self.raw_pixels, list) else self.raw_pixels
+        frame2 = "".join(self.raw_pixels2) if isinstance(self.raw_pixels2, list) else self.raw_pixels2
+
+        pixels = frame1 + frame2
+
         pixels = " ".join([pixels[i:i+4] for i in range(0, len(pixels), 4)]) + " xxxx "
         if pixels == " xxxx ":
             return "ffffffff"
+
         code = ""
         barrel = ""
         short_pat = ""
@@ -635,7 +631,6 @@ class Sprite(DataObject):
                     elif possible_long:
                         offset = (dist_long // 5 * 2) * 16
                     else:
-                        # NO POSSIBLE PATTERN
                         pass
                     repeat = 32 - repeat
                     cmd = hex(offset + repeat)[2:].zfill(4)
@@ -667,7 +662,7 @@ class Sprite(DataObject):
             barrel += "0"
         code += "0000"
         code = code[:ins] + barrel + ": " + code[ins:]
-        barrel = extra
+        barrel = extra if 'extra' in locals() else ""
         ins += 86
         code = code[:ins] + "\n" + code[ins:]
         ins += 1
@@ -676,8 +671,8 @@ class Sprite(DataObject):
                 barrel += "0"
             barrel = "".join([hex(int(barrel[s:s+4], 2))[2:] for s in range(0,16,4)])
             code = code[:ins] + barrel + " " + code[ins:]
-        return code
 
+        return code
 
 class MenuIcon(Sprite):
     namePattern = "Menu Icon %i"

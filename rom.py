@@ -2510,7 +2510,7 @@ class ROM(object):
                         token = self.getBytes(startAddr + v*bytes)[2:]"""
 
     def filterModified(self, section):
-        return filter(lambda data: data.modified, section)
+        return [data for data in section if data.modified]
 
     # ------------------------------
 
@@ -2784,7 +2784,9 @@ class ROM(object):
 
                 yield "Constructing byte array for icon %i..." % i
 
-                bytes_data = icons[i].raw_pixels + icons[i].raw_pixels2
+                r1 = "".join(icons[i].raw_pixels) if isinstance(icons[i].raw_pixels, list) else icons[i].raw_pixels
+                r2 = "".join(icons[i].raw_pixels2) if isinstance(icons[i].raw_pixels2, list) else icons[i].raw_pixels2
+                bytes_data = r1 + r2
 
                 yield 66
 
@@ -3208,34 +3210,32 @@ class ROM(object):
         yield None
 
     def writeOtherIcons(self):
-
         yield "item/spell icons"
 
         icons = self.data["other_icons"]
-        iconModified = list(filter(lambda a: a.modified, icons))
-
+        iconModified = [icon for icon in icons if icon.modified]
         yield len(iconModified)
-        # yield len(conglomeratedBanks)
 
         addr = h2i(self.getBytes(self.addresses["other_icons_ptr"], 4))
 
         for idx in range(len(icons)):
+            # Получаем raw_pixels как строку (даже если это список)
+            raw_pixels = icons[idx].raw_pixels
+            if isinstance(raw_pixels, list):
+                raw_str = "".join(raw_pixels)
+            else:
+                raw_str = raw_pixels
 
             if icons[idx].modified:
-
                 yield "Constructing byte array for icon set %i..." % idx
-
-                bytes_data = icons[idx].raw_pixels
-
+                bytes_data = raw_str
                 yield 50
-
                 yield "Writing byte array for icon set %i..." % idx
-
                 self.writeBytes(addr, bytes_data)
-
                 yield "Moving on..."
 
-            addr += len(icons[idx].raw_pixels)//2
+            # Смещаем адрес на длину данных иконки (в байтах)
+            addr += len(raw_str) // 2
 
         yield None
 
@@ -3431,10 +3431,14 @@ class Spot(object):
         self.idx = None
         self.addr = None
         self.data = None
-    def __cmp__(self, s2):
-        if self.addr != s2.addr:
-            return cmp(self.addr, s2.addr)
-        return cmp(self.idx, s2.idx)
+
+    def __lt__(self, other):
+        if self.addr != other.addr:
+            return self.addr < other.addr
+        return self.idx < other.idx
+
+    def __eq__(self, other):
+        return self.addr == other.addr and self.idx == other.idx
+
     def __repr__(self):
-        # return str(hex(self.addr))
         return "(%i, %x, %s)" % (self.idx, self.addr, self.data is not None)

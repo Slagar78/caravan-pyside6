@@ -190,6 +190,13 @@ class SpritePanel(rompanel.ROMPanel):
 
         # Timer
         self.timer.start(self.animDelays[0])  # start with Walk
+        
+    def ensureSecondFrame(self):
+        """Безопасно создаёт второй кадр, если его нет"""
+        if not hasattr(self, 'raw_pixels2') or self.raw_pixels2 is None or len(self.raw_pixels2) == 0:
+            self.raw_pixels2 = self.raw_pixels[:] if hasattr(self, 'raw_pixels') else "0" * (self.width * self.height)
+        if not hasattr(self, 'pixels2') or self.pixels2 is None or len(self.pixels2) == 0:
+            self.pixels2 = [row[:] for row in self.pixels] if hasattr(self, 'pixels') else ["0"*self.width for _ in range(self.height)]    
 
     # ====================== Methods ======================
 
@@ -202,40 +209,40 @@ class SpritePanel(rompanel.ROMPanel):
         size = self.editPanel.bmp.size()
         w, h = size.width(), size.height()
 
-        dlg = QFileDialog(self, f"Import 16-color {w}x{h} GIF", "", "GIF files (*.gif)")
+        dlg = QFileDialog(self, f"Import {w}x{h} PNG", "", "PNG files (*.png)")
         dlg.setFileMode(QFileDialog.ExistingFile)
+        if dlg.exec() != QDialog.Accepted:
+            return
 
-        if dlg.exec() == QDialog.Accepted:
-            fn = dlg.selectedFiles()[0]
-            try:
-                img = Image.open(fn)
-                if img.size != (w, h):
-                    QMessageBox.warning(self, f"{fn} is {img.size[0]}x{img.size[1]} and should be {w}x{h}.",
-                                        self.parent.baseTitle + " -- Error")
-                elif img.format != "GIF" or img.getpalette() is None:
-                    QMessageBox.warning(self, f"{fn} is not a GIF or is improperly formatted.",
-                                        self.parent.baseTitle + " -- Error")
-                else:
-                    imgdata = list(img.getdata())
-                    pixels = "".join(f"{d:x}" for d in imgdata)
-                    pixels = [pixels[i:i + w] for i in range(0, w * h, w)]
+        fn = dlg.selectedFiles()[0]
+        try:
+            img = Image.open(fn)
+            if img.mode != 'P':
+                img = img.convert('P', palette=Image.ADAPTIVE, colors=16)
 
-                    raw = self.sprite.convertFromPixelRows(pixels) or ""
+            if img.size != (w, h):
+                QMessageBox.warning(self, "Ошибка", f"Изображение должно быть {w}x{h}")
+                return
 
-                    if self.frame == 0:
-                        self.sprite.pixels = pixels
-                        self.sprite.raw_pixels = raw
-                    else:
-                        self.sprite.pixels2 = pixels
-                        self.sprite.raw_pixels2 = raw
+            indexes = list(img.getdata())
+            pixels_hex = "".join(f"{idx:x}" for idx in indexes)
+            pixel_rows = [pixels_hex[i:i+w] for i in range(0, len(pixels_hex), w)]
 
-                    self.changeSprite()
-                    self.changeColors()
-                    self.modify()
-                del img
-            except Exception:
-                QMessageBox.warning(self, f"{fn} is not a GIF or is improperly formatted.",
-                                    self.parent.baseTitle + " -- Error")
+            raw = self.sprite.convertFromPixelRows(pixel_rows)
+            raw_str = "".join(raw) if isinstance(raw, list) else raw or ""
+
+            if self.frame == 0:
+                self.sprite.raw_pixels = raw_str
+                self.sprite.pixels = pixel_rows
+            else:
+                self.sprite.raw_pixels2 = raw_str
+                self.sprite.pixels2 = pixel_rows
+
+            self.changeSprite()        # важно
+            self.modify()
+
+        except Exception as e:
+            QMessageBox.critical(self, "Import Error", str(e))
 
     def OnExportImage(self):
         if not shiboken6.isValid(self.editPanel):
@@ -245,18 +252,28 @@ class SpritePanel(rompanel.ROMPanel):
 
         size = self.editPanel.bmp.size()
         w, h = size.width(), size.height()
-
-        dlg = QFileDialog(self, f"Export 16-color {w}x{h} GIF", "", "GIF files (*.gif)")
+        dlg = QFileDialog(self, f"Export {w}x{h} PNG", "", "PNG files (*.png)")
         dlg.setAcceptMode(QFileDialog.AcceptSave)
-
         if dlg.exec() == QDialog.Accepted:
             fn = dlg.selectedFiles()[0]
-            img = Image.new("P", (w, h))
-            img.putdata([int(a, 16) for pr in self.editPanel.pixels for a in pr])
-            p = [v for rt in self.editPanel.palette.rgbaTuples() for v in rt[:3]]
-            p += [0] * (768 - len(p))
-            img.putpalette(p)
-            img.save(fn, "GIF")
+            try:
+                # Пиксели из экранного представления
+                img = Image.new("P", (w, h))
+                flat = [int(a, 16) for pr in self.editPanel.pixels for a in pr]
+                img.putdata(flat)
+
+                # Палитра из текущей (16 цветов)
+                palette_bytes = []
+                for i in range(16):
+                    c = self.palette.colors[i]
+                    palette_bytes.extend([int(c[1:3],16), int(c[3:5],16), int(c[5:7],16)])
+                palette_bytes += [0] * (768 - len(palette_bytes))
+                img.putpalette(palette_bytes)
+
+                # Прозрачность для индекса 0
+                img.save(fn, "PNG", transparency=0)
+            except Exception as e:
+                QMessageBox.critical(self, "Export Error", str(e))
 
     def OnShow(self, event=None):
         self.changeColors()
@@ -314,7 +331,15 @@ class SpritePanel(rompanel.ROMPanel):
         if not self.sprite or not shiboken6.isValid(self.editPanel):
             return
 
-        if self.frame == 0 or not hasattr(self.sprite, 'pixels2'):
+        # ФИКС ВТОРОГО КАДРА (особенно для Down)
+        if not hasattr(self.sprite, 'raw_pixels2') or self.sprite.raw_pixels2 is None or len(str(self.sprite.raw_pixels2)) == 0:
+            self.sprite.raw_pixels2 = self.sprite.raw_pixels[:] if hasattr(self.sprite, 'raw_pixels') else "0" * (self.sprite.width * self.sprite.height)
+
+        if not hasattr(self.sprite, 'pixels2') or self.sprite.pixels2 is None or len(self.sprite.pixels2) == 0:
+            self.sprite.pixels2 = [row[:] for row in self.sprite.pixels] if hasattr(self.sprite, 'pixels') else ["0"*self.sprite.width for _ in range(self.sprite.height)]
+
+        # Показываем нужный кадр
+        if self.frame == 0 or not getattr(self.sprite, 'pixels2', None):
             self.editPanel.refreshSprite(self.sprite.pixels)
         else:
             self.editPanel.refreshSprite(self.sprite.pixels2)
@@ -323,18 +348,16 @@ class SpritePanel(rompanel.ROMPanel):
         self.editPanel.update()
         self.refreshPixels()
 
-    def changeAnim(self, num):
-        self.animCur = num
-        self.timer.start(self.animDelays[num])
 
     def changeAnimSprite(self):
         if not shiboken6.isValid(self.animPanel) or not self.sprite:
             return
 
-        if self.animFrame == 0 or not hasattr(self.sprite, 'pixels2'):
-            pixels = self.sprite.pixels
+        # Простая и надёжная версия
+        if self.animFrame == 0:
+            pixels = getattr(self.sprite, 'pixels', [])
         else:
-            pixels = self.sprite.pixels2
+            pixels = getattr(self.sprite, 'pixels2', getattr(self.sprite, 'pixels', []))
 
         self.animPanel.refreshSprite(pixels, force=True)
         self.animPanel.update()

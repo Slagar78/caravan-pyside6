@@ -1,0 +1,8 @@
+Traceback (most recent call last):
+  File "D:\Caravan_port\caravan-pyside6\caravan.py", line 434, in saveFile
+    texts, pieces = next(gen)
+                    ~~~~^^^^^
+  File "D:\Caravan_port\caravan-pyside6\rom.py", line 2597, in writeAllData
+    self.writeWeaponSprites,
+    ^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'ROM' object has no attribute 'writeWeaponSprites'. Did you mean: 'getWeaponSprites'?
