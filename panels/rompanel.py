@@ -433,6 +433,71 @@ class SpritePanel(QWidget):
                             parent.commit([[old_tiles], [new_tiles]])
                     return
 
+                # ==== BattleFloorPanel ====
+                if hasattr(parent, 'battleFloor') and hasattr(parent, 'curFrame'):
+                    cur_frame = parent.curFrame
+                    if cur_frame and hasattr(cur_frame, 'tiles'):
+                        old_tiles = cur_frame.tiles[:] if hasattr(cur_frame, 'tiles') else None
+
+                        if event.modifiers() & Qt.ShiftModifier:
+                            col = int(self.pixels[y][x], 16)
+                            if event.buttons() & Qt.LeftButton:
+                                parent.color_left = col
+                            else:
+                                parent.color_right = col
+                            if hasattr(parent, 'selectedColorLeft'):
+                                parent.selectedColorLeft.color = col
+                                parent.selectedColorLeft.setStyleSheet(
+                                    f"border: 2px solid #555; border-radius: 4px; background-color: {parent.palette.colors[col]};")
+                            if hasattr(parent, 'selectedColorRight'):
+                                parent.selectedColorRight.color = col
+                                parent.selectedColorRight.setStyleSheet(
+                                    f"border: 2px solid #555; border-radius: 4px; background-color: {parent.palette.colors[col]};")
+                            return
+
+                        modified = False
+                        if parent.mode == 0:  # Пиксель
+                            col = hex(color1 if event.buttons() & Qt.LeftButton else color2)[2:]
+                            if self.pixels[y][x] != col:
+                                self.pixels[y] = self.pixels[y][:x] + col + self.pixels[y][x+1:]
+                                modified = True
+                        elif parent.mode == 1:  # Заливка
+                            col = hex(color1 if event.buttons() & Qt.LeftButton else color2)[2:]
+                            target = self.pixels[y][x]
+                            queue = [(x, y)]
+                            visited = set()
+                            w, h = self.width, self.height
+                            while queue:
+                                cx, cy = queue.pop(0)
+                                if (cx, cy) in visited:
+                                    continue
+                                if cx < 0 or cx >= w or cy < 0 or cy >= h:
+                                    continue
+                                if self.pixels[cy][cx] != target:
+                                    continue
+                                visited.add((cx, cy))
+                                self.pixels[cy] = self.pixels[cy][:cx] + col + self.pixels[cy][cx+1:]
+                                queue.extend([(cx - 1, cy), (cx + 1, cy), (cx, cy - 1), (cx, cy + 1)])
+                            modified = True
+                        elif parent.mode == 2:  # Замена
+                            col = hex(color1 if event.buttons() & Qt.LeftButton else color2)[2:]
+                            repl = self.pixels[y][x]
+                            if repl != col:
+                                for i in range(len(self.pixels)):
+                                    self.pixels[i] = self.pixels[i].replace(repl, col)
+                                modified = True
+
+                        if modified:
+                            parent._updateFrameTiles(cur_frame)
+                            parent.modify()
+                            self.refreshSprite()
+                            self.update()
+                            parent.refreshPixels()
+                            new_tiles = cur_frame.tiles[:]
+                            if old_tiles != new_tiles:
+                                parent.commit([[old_tiles], [new_tiles]])
+                        return
+
                 # ==== Остальные панели (иконки, фоны, спелл-анимации) ====
                 spr = parent.getCurrentSpriteObject()
                 oldpix = spr.raw_pixels[:] if hasattr(spr, 'raw_pixels') else ""
