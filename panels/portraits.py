@@ -525,76 +525,102 @@ class PortraitPanel(rompanel.ROMPanel):
         palette = self.palette
         for c in range(len(self.colorPanels)):
             if shiboken6.isValid(self.colorPanels[c]):
-                self.colorPanels[c].setStyleSheet(f"background-color: {palette.colors[c]};")
+                self.colorPanels[c].setStyleSheet(
+                    f"background-color: {palette.colors[c]}; border: 1px solid #555; border-radius: 3px;"
+                )
                 self.colorPanels[c].update()
 
     def OnImportImage(self):
         if not shiboken6.isValid(self.portraitTileWidget) or self.rom is None:
             return
         width, height = 64, 64
-        dlg = QFileDialog(self, f"Import 16-color {width}x{height} GIF", "", "GIF files (*.gif)")
+        dlg = QFileDialog(self, f"Import {width}x{height} PNG", "", "PNG files (*.png)")
         dlg.setFileMode(QFileDialog.ExistingFile)
         if dlg.exec() == QDialog.Accepted:
             fn = dlg.selectedFiles()[0]
             try:
                 img = Image.open(fn)
-                imgw, imgh = img.size
-                imgpal = img.getpalette()
+                # Приводим к индексированному 16-цветному, если нужно
+                if img.mode != 'P':
+                    img = img.convert('P', palette=Image.ADAPTIVE, colors=16)
+                if img.mode != 'P':
+                    raise ValueError("Image is not indexed. Please save as 16-color PNG with palette.")
                 if img.size != (width, height):
-                    QMessageBox.warning(self, f"{fn} is {imgw}x{imgh} and should be {width}x{height}.",
-                                        self.parent.baseTitle + " -- Error")
-                elif img.format != "GIF" or imgpal is None:
-                    QMessageBox.warning(self, f"{fn} is not a GIF or is improperly formatted.",
-                                        self.parent.baseTitle + " -- Error")
-                else:
-                    cols = []
-                    for i in range(0, 48, 3):
-                        r, g, b = imgpal[i], imgpal[i+1], imgpal[i+2]
-                        cr, cg, cb = conform_color_to_cram(r, g, b)
-                        cols.append("#%02x%02x%02x" % (cr, cg, cb))
-                    pal = data.Palette()
-                    pal.init(cols)
-                    self.palette = pal
-                    self.portrait.palette = pal
-                    imgdata = list(img.getdata())
-                    pixels = "".join(["%x" % d for d in imgdata])
-                    pixels = [pixels[i:i+width] for i in range(0, width*height, width)]
-                    self.curFrame.convertFromPixelRows(pixels)
-                    newtiles = [None]*len(self.curFrame.tiles)
-                    order = self.curFrame.getTileOrder(imgw//8, imgh//8)
-                    for i in range(len(newtiles)):
-                        newtiles[order[i]] = self.curFrame.tiles[i]
-                    self.curFrame.tiles = newtiles
-                    self.changePortrait()
-                    self.changeColors()
-                    self.modify()
-                del img
-            except Exception:
-                QMessageBox.warning(self, f"{fn} is not a GIF or is improperly formatted.",
-                                    self.parent.baseTitle + " -- Error")
+                    QMessageBox.warning(self, f"Image must be {width}x{height}.", self.parent.baseTitle + " -- Error")
+                    return
+
+                # Получаем палитру и преобразуем каждый цвет в CRAM (как в оригинале)
+                raw_palette = img.getpalette()
+                if raw_palette is None or len(raw_palette) < 48:
+                    raw_palette = list(raw_palette or [])
+                    raw_palette += [0] * (48 - len(raw_palette))
+
+                cols = []
+                for i in range(0, 48, 3):
+                    r, g, b = raw_palette[i], raw_palette[i+1], raw_palette[i+2]
+                    cr, cg, cb = conform_color_to_cram(r, g, b)
+                    cols.append("#%02x%02x%02x" % (cr, cg, cb))
+
+                pal = data.Palette()
+                pal.init(cols)
+                self.palette = pal
+                self.portrait.palette = pal
+
+                # Пиксели оставляем как есть (индекс 0 считается прозрачным)
+                indexes = list(img.getdata())
+                pixels_hex = "".join(["%x" % idx for idx in indexes])
+                pixel_rows = [pixels_hex[i:i+width] for i in range(0, width*height, width)]
+
+                # Обновляем тайлы кадра
+                self.curFrame.convertFromPixelRows(pixel_rows)
+                tw = width // 8
+                th = height // 8
+                newtiles = [None] * len(self.curFrame.tiles)
+                order = self.curFrame.getTileOrder(tw, th)
+                for i in range(len(newtiles)):
+                    newtiles[order[i]] = self.curFrame.tiles[i]
+                self.curFrame.tiles = newtiles
+
+                self.changePortrait()
+                self.changeColors()
+                self.modify()
+            except Exception as e:
+                QMessageBox.critical(self, "Import Error", str(e))
 
     def OnExportImage(self):
         if not shiboken6.isValid(self.portraitTileWidget):
             return
         width, height = 64, 64
-        dlg = QFileDialog(self, f"Export 16-color {width}x{height} GIF", "", "GIF files (*.gif)")
+        dlg = QFileDialog(self, f"Export {width}x{height} PNG", "", "PNG files (*.png)")
         dlg.setAcceptMode(QFileDialog.AcceptSave)
         if dlg.exec() == QDialog.Accepted:
             fn = dlg.selectedFiles()[0]
-            img = Image.new("P", (width, height))
-            tw, th = 8, 8
-            order = self.curFrame.getTileOrder(tw, th)
-            tiles = [self.curFrame.tiles[t] for t in order]
-            pixels_flat = []
-            for tRow in range(th):
-                for pRow in range(8):
-                    row = "".join([tiles[tRow*tw+to].pixels[pRow] for to in range(tw)])
-                    pixels_flat.extend([int(c, 16) for c in row])
-            img.putdata(pixels_flat)
-            p = [v for rt in self.portrait.palette.rgbaTuples() for v in rt[:3]]
-            p += [0] * (768 - len(p))
-            img.putpalette(p)
-            img.save(fn, "GIF")
+            try:
+                # Собираем пиксели в экранном порядке (как при отображении)
+                tw, th = 8, 8
+                order = self.curFrame.getTileOrder(tw, th)
+                tiles = [self.curFrame.tiles[t] for t in order]
+                pixels_flat = []
+                for tRow in range(th):
+                    for pRow in range(8):
+                        row = "".join([tiles[tRow*tw+to].pixels[pRow] for to in range(tw)])
+                        pixels_flat.extend([int(c, 16) for c in row])
+
+                img = Image.new("P", (width, height))
+                img.putdata(pixels_flat)
+
+                # Палитра из портрета (уже в CRAM)
+                palette_bytes = []
+                for i in range(16):
+                    c = self.portrait.palette.colors[i]
+                    palette_bytes.extend([int(c[1:3],16), int(c[3:5],16), int(c[5:7],16)])
+                palette_bytes += [0] * (768 - len(palette_bytes))
+                img.putpalette(palette_bytes)
+
+                # Сохраняем с прозрачностью для индекса 0
+                img.save(fn, "PNG", transparency=0)
+            except Exception as e:
+                QMessageBox.critical(self, "Export Error", str(e))
 
     def OnSelectPortrait(self, idx):
         self.changePortrait(idx)

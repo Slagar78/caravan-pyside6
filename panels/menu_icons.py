@@ -1,8 +1,8 @@
 import binascii
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QGroupBox,
-    QLabel, QPushButton, QRadioButton, QFileDialog, QMessageBox,
-    QDialog
+    QLabel, QPushButton, QRadioButton, QComboBox, QFileDialog,
+    QMessageBox, QDialog
 )
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QPixmap, QImage, QColor
@@ -17,7 +17,6 @@ class MenuIconPanel(rompanel.ROMPanel):
     frameTitle = "Menu Icon Editor"
 
     def init(self):
-        # Палитра
         self.palette = self.rom.getDataByName("palettes", "Sprite & UI Palette")
         if self.palette is None:
             self.palette = data.Palette()
@@ -32,65 +31,84 @@ class MenuIconPanel(rompanel.ROMPanel):
         self.animCur = 0
         self.icon = None
 
-        # ==================== Edit ====================
+        # ==================== SELECT ICON ====================
+        sbs1 = QGroupBox("Select Menu Icon")
+        sbs1_layout = QVBoxLayout(sbs1)
+        self.iconList = QComboBox()
+        self.iconList.addItems([ic.name for ic in self.rom.data["menu_icons"]])
+        self.iconList.setCurrentIndex(0)
+        sbs1_layout.addWidget(self.iconList)
+
+        # ==================== EDIT ====================
         sbs4 = QGroupBox("Edit")
         sbs4_layout = QHBoxLayout(sbs4)
 
         text1 = QLabel("Colors")
         text2 = QLabel("Icon (Color 0 = trans)")
-        text3 = QLabel("Left-Click")
-        text4 = QLabel("Right-Click")
-        text5 = QLabel("Mode")
 
-        # Основной холст – редактирование включено
         self.editPanel = rompanel.SpritePanel(self, None, 24, 24, self.palette, scale=8, bg=16, func="edit")
 
+        # Палитра 16 цветов (как в оригинале – два столбца)
         self.colorPanels = []
         for p in range(16):
             self.colorPanels.append(rompanel.ColorPanel2(self, None, "#000000", num=p))
         self.changeColors()
 
-        self.switchButton = QPushButton("Frame")
-        self.switchButton.setFixedSize(40, 20)
-
-        # Left part
-        sbs4left = QVBoxLayout()
-        colorSizer = QGridLayout()
-        for i, cp in enumerate(self.colorPanels):
-            colorSizer.addWidget(cp, i // 2, i % 2)
-
         self.importButton = QPushButton("Import")
-        self.importButton.setFixedSize(40, 20)
+        self.importButton.setFixedSize(60, 22)
         self.exportButton = QPushButton("Export")
-        self.exportButton.setFixedSize(40, 20)
+        self.exportButton.setFixedSize(60, 22)
+
+        # Индикаторы выбранного цвета (ColorPanel без рамок, как было)
+        self.selectedColorLeft = rompanel.ColorPanel(self, None, "#000000", size=(40, 40), enable=False)
+        self.selectedColorRight = rompanel.ColorPanel(self, None, "#000000", size=(40, 40), enable=False)
+        self.selectedColorLeft.color = 0
+        self.selectedColorRight.color = 0
+
+        # === Левая часть: палитра (два столбца) ===
+        sbs4left = QVBoxLayout()
+        leftCol = QVBoxLayout()
+        leftCol.setSpacing(3)
+        for i in range(0, 8):
+            leftCol.addWidget(self.colorPanels[i], alignment=Qt.AlignCenter)
+
+        rightCol = QVBoxLayout()
+        rightCol.setSpacing(3)
+        for i in range(8, 16):
+            rightCol.addWidget(self.colorPanels[i], alignment=Qt.AlignCenter)
+
+        colorSizer = QHBoxLayout()
+        colorSizer.addLayout(leftCol)
+        colorSizer.addSpacing(10)
+        colorSizer.addLayout(rightCol)
 
         sbs4left.addWidget(text1, alignment=Qt.AlignCenter)
         sbs4left.addLayout(colorSizer)
         sbs4left.addWidget(self.importButton, alignment=Qt.AlignCenter)
         sbs4left.addWidget(self.exportButton, alignment=Qt.AlignCenter)
 
-        # Center
+        # === Центр: спрайт ===
         sbs4mid = QVBoxLayout()
         sbs4mid.addWidget(text2, alignment=Qt.AlignCenter)
         sbs4mid.addWidget(self.editPanel, alignment=Qt.AlignCenter)
 
-        # Right part
+        # === Правая часть: L / R, режимы, кнопка Frame ===
         sbs4right = QVBoxLayout()
-        self.selectedColorLeft = rompanel.ColorPanel(self, None, "#000000", size=(40, 40), enable=False)
-        self.selectedColorRight = rompanel.ColorPanel(self, None, "#000000", size=(40, 40), enable=False)
-        self.selectedColorLeft.color = 0
-        self.selectedColorRight.color = 0
-
+        left_click_label = QLabel("Left-Click")
+        right_click_label = QLabel("Right-Click")
+        mode_label = QLabel("Mode")
         self.modePixel = QRadioButton("Pixel")
         self.modeFill = QRadioButton("Floodfill")
         self.modeReplace = QRadioButton("Replace")
         self.modePixel.setChecked(True)
+        self.switchButton = QPushButton("Frame")
+        self.switchButton.setFixedSize(40, 20)
 
-        sbs4right.addWidget(text3, alignment=Qt.AlignCenter)
+        sbs4right.addWidget(left_click_label, alignment=Qt.AlignCenter)
         sbs4right.addWidget(self.selectedColorLeft, alignment=Qt.AlignCenter)
-        sbs4right.addWidget(text4, alignment=Qt.AlignCenter)
+        sbs4right.addWidget(right_click_label, alignment=Qt.AlignCenter)
         sbs4right.addWidget(self.selectedColorRight, alignment=Qt.AlignCenter)
-        sbs4right.addWidget(text5, alignment=Qt.AlignCenter)
+        sbs4right.addWidget(mode_label, alignment=Qt.AlignCenter)
         sbs4right.addWidget(self.modePixel)
         sbs4right.addWidget(self.modeFill)
         sbs4right.addWidget(self.modeReplace)
@@ -100,7 +118,7 @@ class MenuIconPanel(rompanel.ROMPanel):
         sbs4_layout.addLayout(sbs4mid, 1)
         sbs4_layout.addLayout(sbs4right, 0)
 
-        # ==================== Change Animation ====================
+        # ==================== CHANGE ANIMATION ====================
         sbs3 = QGroupBox("Change Animation")
         sbs3_layout = QHBoxLayout(sbs3)
         self.animButtons = []
@@ -110,23 +128,21 @@ class MenuIconPanel(rompanel.ROMPanel):
             self.animButtons.append(b)
             sbs3_layout.addWidget(b, alignment=Qt.AlignCenter)
 
-        # ==================== Preview Animation ====================
+        # ==================== PREVIEW ANIMATION ====================
         sbs5 = QGroupBox("Preview Animation")
         sbs5.setMinimumSize(100, 100)
         sbs5_layout = QVBoxLayout(sbs5)
 
-        # Превью: клик игнорируется (пустая лямбда)
         self.animPanel = rompanel.SpritePanel(self, None, 24, 24, self.palette, scale=3, bg=16, edit=False,
                                               func=lambda event: None)
         self.animPanel.setFixedSize(72, 72)
+        sbs5_layout.addWidget(self.animPanel, alignment=Qt.AlignCenter)
 
         self.animDelays = [250, 150]
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.TimerTest)
 
-        sbs5_layout.addWidget(self.animPanel, alignment=Qt.AlignCenter)
-
-        # ==================== Main Layout ====================
+        # ==================== MAIN LAYOUT ====================
         midSizer = QHBoxLayout()
         midRightSizer = QVBoxLayout()
 
@@ -137,12 +153,14 @@ class MenuIconPanel(rompanel.ROMPanel):
 
         midContainer = QWidget()
         midContainer.setLayout(midSizer)
-        self.sizer.addWidget(midContainer, 0, 0, 1, 2)
+        self.sizer.addWidget(sbs1, 0, 0, 1, 2)
+        self.sizer.addWidget(midContainer, 1, 0, 1, 2)
 
-        # Load first icon
+        # Загрузка первой иконки
         self.changeIcon(0)
 
-        # ==================== Signals ====================
+        # Signals
+        self.iconList.currentIndexChanged.connect(self.OnSelectIcon)
         self.modePixel.toggled.connect(self.OnSelectMode)
         self.modeFill.toggled.connect(self.OnSelectMode)
         self.modeReplace.toggled.connect(self.OnSelectMode)
@@ -154,67 +172,128 @@ class MenuIconPanel(rompanel.ROMPanel):
         for i, btn in enumerate(self.animButtons):
             btn.clicked.connect(lambda checked=False, idx=i: self.changeAnim(idx))
 
-        self.timer.start(self.animDelays[0])   # Walk сразу
+        self.timer.start(self.animDelays[0])
 
     # ====================== Methods ======================
+
+    def changeEditColor(self, button, num):
+        """Выбор цвета с палитры (левый/правый клик)"""
+        if button == 0:
+            self.color_left = num
+            if hasattr(self, 'selectedColorLeft') and shiboken6.isValid(self.selectedColorLeft):
+                self.selectedColorLeft.color = num
+                self.selectedColorLeft.setStyleSheet(f"background-color: {self.palette.colors[num]};")
+        else:
+            self.color_right = num
+            if hasattr(self, 'selectedColorRight') and shiboken6.isValid(self.selectedColorRight):
+                self.selectedColorRight.color = num
+                self.selectedColorRight.setStyleSheet(f"background-color: {self.palette.colors[num]};")
+
+    def OnSelectIcon(self, idx):
+        self.changeIcon(idx)
 
     def OnImportImage(self):
         if not shiboken6.isValid(self.editPanel):
             return
         size = self.editPanel.bmp.size()
         w, h = size.width(), size.height()
-
-        dlg = QFileDialog(self, f"Import 16-color {w}x{h} GIF", "", "GIF files (*.gif)")
+        dlg = QFileDialog(self, f"Import {w}x{h} PNG", "", "PNG files (*.png)")
         dlg.setFileMode(QFileDialog.ExistingFile)
-
         if dlg.exec() == QDialog.Accepted:
             fn = dlg.selectedFiles()[0]
             try:
                 img = Image.open(fn)
                 if img.size != (w, h):
-                    QMessageBox.warning(self, f"{fn} is {img.size[0]}x{img.size[1]} and should be {w}x{h}.",
-                                        self.parent.baseTitle + " -- Error")
-                elif img.format != "GIF" or img.getpalette() is None:
-                    QMessageBox.warning(self, f"{fn} is not a GIF or is improperly formatted.",
-                                        self.parent.baseTitle + " -- Error")
+                    QMessageBox.warning(self, f"Image must be {w}x{h}.", self.parent.baseTitle + " -- Error")
+                    return
+
+                # Фиксированная игровая палитра (индекс 0 – прозрачный)
+                game_palette = []
+                for i in range(16):
+                    c = self.palette.colors[i]
+                    game_palette.append((int(c[1:3],16), int(c[3:5],16), int(c[5:7],16)))
+
+                if img.mode == 'P':
+                    pal = img.getpalette()
+                    transp = img.info.get('transparency', None)
+                    mapping = []
+                    for i in range(16):
+                        if i == transp:
+                            mapping.append(0)
+                            continue
+                        r, g, b = pal[i*3], pal[i*3+1], pal[i*3+2]
+                        best_idx = 1
+                        best_dist = 999999
+                        for j in range(1, 16):
+                            gr, gg, gb = game_palette[j]
+                            dist = (r-gr)**2 + (g-gg)**2 + (b-gb)**2
+                            if dist < best_dist:
+                                best_dist = dist
+                                best_idx = j
+                        mapping.append(best_idx)
+                    raw = list(img.getdata())
+                    new_indices = [mapping[idx] for idx in raw]
                 else:
-                    imgdata = list(img.getdata())
-                    pixels = "".join(f"{d:x}" for d in imgdata)
-                    pixels = [pixels[i:i + w] for i in range(0, w * h, w)]
-                    raw = self.icon.convertFromPixelRows(pixels) or ""
+                    img = img.convert("RGBA")
+                    raw = list(img.getdata())
+                    new_indices = []
+                    for r, g, b, a in raw:
+                        if a < 128:
+                            new_indices.append(0)
+                            continue
+                        best_idx = 1
+                        best_dist = 999999
+                        for j in range(1, 16):
+                            gr, gg, gb = game_palette[j]
+                            dist = (r-gr)**2 + (g-gg)**2 + (b-gb)**2
+                            if dist < best_dist:
+                                best_dist = dist
+                                best_idx = j
+                        new_indices.append(best_idx)
 
-                    if self.frame == 0:
-                        self.icon.pixels = pixels
-                        self.icon.raw_pixels = raw
-                    else:
-                        self.icon.pixels2 = pixels
-                        self.icon.raw_pixels2 = raw
+                pixels = []
+                for y in range(h):
+                    row = new_indices[y*w:(y+1)*w]
+                    pixels.append("".join(["%x" % v for v in row]))
+                raw_pixels = "".join(pixels)
 
-                    self.changeIcon()
-                    self.changeColors()
-                    self.modify()
-                del img
-            except Exception:
-                QMessageBox.warning(self, f"{fn} is not a GIF or is improperly formatted.",
-                                    self.parent.baseTitle + " -- Error")
+                if self.frame == 0:
+                    self.icon.pixels = pixels
+                    self.icon.raw_pixels = raw_pixels
+                else:
+                    self.icon.pixels2 = pixels
+                    self.icon.raw_pixels2 = raw_pixels
+
+                self.changeIcon()
+                self.changeColors()
+                self.modify()
+            except Exception as e:
+                QMessageBox.critical(self, "Import Error", str(e))
 
     def OnExportImage(self):
         if not shiboken6.isValid(self.editPanel):
             return
         size = self.editPanel.bmp.size()
         w, h = size.width(), size.height()
-
-        dlg = QFileDialog(self, f"Export 16-color {w}x{h} GIF", "", "GIF files (*.gif)")
+        dlg = QFileDialog(self, f"Export {w}x{h} PNG", "", "PNG files (*.png)")
         dlg.setAcceptMode(QFileDialog.AcceptSave)
-
         if dlg.exec() == QDialog.Accepted:
             fn = dlg.selectedFiles()[0]
-            img = Image.new("P", (w, h))
-            img.putdata([int(a, 16) for pr in self.editPanel.pixels for a in pr])
-            p = [v for rt in self.editPanel.palette.rgbaTuples() for v in rt[:3]]
-            p += [0] * (768 - len(p))
-            img.putpalette(p)
-            img.save(fn, "GIF")
+            try:
+                img = Image.new("P", (w, h))
+                flat = [int(a, 16) for pr in self.editPanel.pixels for a in pr]
+                img.putdata(flat)
+
+                palette_bytes = []
+                for i in range(16):
+                    c = self.palette.colors[i]
+                    palette_bytes.extend([int(c[1:3],16), int(c[3:5],16), int(c[5:7],16)])
+                palette_bytes += [0] * (768 - len(palette_bytes))
+                img.putpalette(palette_bytes)
+
+                img.save(fn, "PNG", transparency=0)
+            except Exception as e:
+                QMessageBox.critical(self, "Export Error", str(e))
 
     def TimerTest(self):
         self.animFrame ^= 1
@@ -223,7 +302,9 @@ class MenuIconPanel(rompanel.ROMPanel):
     def changeColors(self):
         for c in range(16):
             if shiboken6.isValid(self.colorPanels[c]):
-                self.colorPanels[c].setStyleSheet(f"background-color: {self.palette.colors[c]};")
+                self.colorPanels[c].setStyleSheet(
+                    f"background-color: {self.palette.colors[c]}; border: none; border-radius: 3px;"
+                )
                 self.colorPanels[c].update()
 
     def OnSelectMode(self, checked):
@@ -281,19 +362,6 @@ class MenuIconPanel(rompanel.ROMPanel):
             self.selectedColorLeft.setStyleSheet(f"background-color: {self.palette.colors[self.color_left]};")
         if hasattr(self, 'selectedColorRight') and shiboken6.isValid(self.selectedColorRight):
             self.selectedColorRight.setStyleSheet(f"background-color: {self.palette.colors[self.color_right]};")
-
-    def changeEditColor(self, button, num):
-        """Выбор цвета с палитры (левый/правый клик)"""
-        if button == 0:
-            self.color_left = num
-            if hasattr(self, 'selectedColorLeft') and shiboken6.isValid(self.selectedColorLeft):
-                self.selectedColorLeft.color = num
-                self.selectedColorLeft.setStyleSheet(f"background-color: {self.palette.colors[num]};")
-        else:
-            self.color_right = num
-            if hasattr(self, 'selectedColorRight') and shiboken6.isValid(self.selectedColorRight):
-                self.selectedColorRight.color = num
-                self.selectedColorRight.setStyleSheet(f"background-color: {self.palette.colors[num]};")
 
     def getCurrentSpriteObject(self):
         return self.icon
