@@ -294,8 +294,18 @@ class SpritePanel(rompanel.ROMPanel):
     def changeColors(self):
         for c in range(16):
             if shiboken6.isValid(self.colorPanels[c]):
-                self.colorPanels[c].setStyleSheet(f"background-color: {self.palette.colors[c]};")
+                self.colorPanels[c].setStyleSheet(
+                    f"background-color: {self.palette.colors[c]}; border-radius: 4px;"
+                )
                 self.colorPanels[c].update()
+        if hasattr(self, 'selectedColorLeft') and shiboken6.isValid(self.selectedColorLeft):
+            self.selectedColorLeft.setStyleSheet(
+                f"background-color: {self.palette.colors[self.color_left]}; border-radius: 6px;"
+            )
+        if hasattr(self, 'selectedColorRight') and shiboken6.isValid(self.selectedColorRight):
+            self.selectedColorRight.setStyleSheet(
+                f"background-color: {self.palette.colors[self.color_right]}; border-radius: 6px;"
+            )
 
     def changeEditColor(self, button, num):
         if button == 0:
@@ -337,28 +347,6 @@ class SpritePanel(rompanel.ROMPanel):
         if not self.sprite:
             return
 
-        # восстановление первого кадра, если повреждён
-        if hasattr(self.sprite, 'pixels') and self.sprite.pixels:
-            if len(self.sprite.raw_pixels) > 24 * 24:
-                raw = self.sprite.convertFromPixelRows(self.sprite.pixels)
-                self.sprite.raw_pixels = "".join(raw) if isinstance(raw, list) else raw
-                self.sprite.modified = True
-
-        # восстановление второго кадра (уже было)
-        if not hasattr(self.sprite, 'raw_pixels2') or self.sprite.raw_pixels2 is None:
-            self.sprite.raw_pixels2 = ""
-            self.sprite.has_second_frame = False
-        if len(self.sprite.raw_pixels2) == 0 and hasattr(self.sprite, 'pixels2') and self.sprite.pixels2:
-            try:
-                raw = self.sprite.convertFromPixelRows(self.sprite.pixels2)
-                self.sprite.raw_pixels2 = "".join(raw) if isinstance(raw, list) else raw
-                self.sprite.has_second_frame = True
-                self.sprite.modified = True
-            except Exception as e:
-                print(f"Не удалось восстановить raw_pixels2: {e}")
-                self.sprite.raw_pixels2 = ""
-                self.sprite.has_second_frame = False
-
         if self.frame == 0:
             self.editPanel.refreshSprite(self.sprite.pixels)
         else:
@@ -379,6 +367,10 @@ class SpritePanel(rompanel.ROMPanel):
 
         self.animPanel.refreshSprite(pixels, force=True)
         self.animPanel.update()
+
+    def changeAnim(self, num):
+        self.animCur = num
+        self.timer.start(self.animDelays[num])
 
     def refreshPixels(self):
         pass

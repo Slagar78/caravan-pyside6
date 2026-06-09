@@ -2924,20 +2924,24 @@ class ROM(object):
         yield None
 
     def writeSprites(self):
-
         yield "character sprites"
 
         dataset = self.data["sprites"]
         table = self.tables["sprites"]
         spritesModified = [s.modified for s in dataset]
+        total_modified = sum(spritesModified)
+        yield total_modified
 
-        yield sum(spritesModified)
-        # yield len(conglomeratedBanks)
-
-        # ----------------------
-        # flexible test
-
-        if sum(spritesModified):
+        if total_modified:
+            processed = 0
+            for i, s in enumerate(dataset):
+                if not spritesModified[i]:
+                    continue
+                processed += 1
+                # Сообщаем прогресс
+                yield f"Compressing sprite {i}..."
+                yield int(processed / total_modified * 100)
+                yield "Moving on..."
 
             table, ptrstr, datastr = self.reformDataSection(table, dataset)
             ptrstr = "".join(ptrstr)
@@ -2948,29 +2952,6 @@ class ROM(object):
             datastr = "".join(datastr)
             self.tables["sprites"] = table
             self.writeBytes(0x220000, ptrstr + datastr)
-
-        # ----------------------
-
-        """for idx in range(len(sprites)):
-
-            if spritesModified[idx]:
-
-                yield "Constructing byte array for sprite %i..." % idx
-
-                bytes_data = sprites[idx].raw_hexlify()
-
-                yield 50
-
-                addr = self.tables["sprites"][idx]
-
-                yield "Writing byte array for sprite %i..." % idx
-
-                #print repr(bytes_data)
-                #print repr(sprites[idx].raw_bytes)
-
-                self.writeBytes(addr, bytes_data)
-
-                yield "Moving on..." """
 
         yield None
 
