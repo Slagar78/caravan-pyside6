@@ -3,7 +3,8 @@ from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QGroupBox,
     QLabel, QPushButton, QComboBox, QFileDialog, QMessageBox,
     QDialog, QTableWidget, QTableWidgetItem, QAbstractItemView,
-    QCheckBox, QHeaderView, QStyledItemDelegate, QSpinBox
+    QCheckBox, QHeaderView, QStyledItemDelegate, QSpinBox,
+    QLineEdit
 )
 from PySide6.QtCore import Qt, Signal, QRect
 from PySide6.QtGui import QPixmap, QImage, QColor, QPainter, QPen, QFont
@@ -91,6 +92,23 @@ class TileCoordDelegate(QStyledItemDelegate):
         editor.setAlignment(Qt.AlignCenter)
         editor.setButtonSymbols(QSpinBox.UpDownArrows)
         editor.setMinimumWidth(30)
+        editor.lineEdit().setReadOnly(True)
+        editor.setStyleSheet("""
+            QSpinBox::up-button, QSpinBox::down-button {
+                width: 16px;                /* ширина кнопок */
+            }
+            QSpinBox::up-button {
+                subcontrol-position: top right;    /* стрелка вверх справа */
+            }
+            QSpinBox::down-button {
+                subcontrol-position: bottom right; /* стрелка вниз справа */
+            }
+        """)
+
+        editor.valueChanged.connect(
+            lambda value, ed=editor, idx=index: self.commitData.emit(ed)
+        )
+
         return editor
 
     def setEditorData(self, editor, index):
@@ -102,7 +120,6 @@ class TileCoordDelegate(QStyledItemDelegate):
     def setModelData(self, editor, model, index):
         model.setData(index, editor.value(), Qt.EditRole)
         model.setData(index, str(editor.value()), Qt.DisplayRole)
-
 # =============================================================================
 # Виджет для отображения портрета с сеткой и возможностью клика по тайлам
 # =============================================================================

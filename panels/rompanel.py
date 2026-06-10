@@ -698,7 +698,7 @@ class MapViewPanel(QWidget):
         h = self.size().height()
         blockW = int(24 * s)
         blockH = int(24 * s)
-
+        
         if self.bg == 16:
             painter.fillRect(0, 0, w, h, QBrush(SpritePanel.alphaPixmap.scaled(w, h)))
         elif self.bg is not None:
@@ -711,7 +711,7 @@ class MapViewPanel(QWidget):
         tViewY = int(self.curViewY) // 24
         xofs = self.curViewX % 24
         yofs = self.curViewY % 24
-
+        
         if self.drawBlocks:
             for y in range(tHeight):
                 for x in range(tWidth):
