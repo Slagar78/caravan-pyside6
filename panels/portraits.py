@@ -78,7 +78,7 @@ def pack_anim_bytes(entries):
     return header + body
 
 # =============================================================================
-# Делегат со спин-боксами для таблиц анимации
+# Делегат со спин-боксами для таблиц анимации (исправленный)
 # =============================================================================
 class TileCoordDelegate(QStyledItemDelegate):
     def __init__(self, max_value=7, parent=None):
@@ -92,16 +92,24 @@ class TileCoordDelegate(QStyledItemDelegate):
         editor.setAlignment(Qt.AlignCenter)
         editor.setButtonSymbols(QSpinBox.UpDownArrows)
         editor.setMinimumWidth(30)
+
         editor.lineEdit().setReadOnly(True)
+
+        # 2. Стрелки всегда видны + зазор между ними (без наезжания)
         editor.setStyleSheet("""
-            QSpinBox::up-button, QSpinBox::down-button {
-                width: 16px;                /* ширина кнопок */
-            }
             QSpinBox::up-button {
-                subcontrol-position: top right;    /* стрелка вверх справа */
+                subcontrol-position: top right;
+                subcontrol-origin: margin;
+                height: 10px;
+                width: 16px;
+                margin-bottom: 2px;
             }
             QSpinBox::down-button {
-                subcontrol-position: bottom right; /* стрелка вниз справа */
+                subcontrol-position: bottom right;
+                subcontrol-origin: margin;
+                height: 10px;
+                width: 16px;
+                margin-top: 2px;
             }
         """)
 
