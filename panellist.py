@@ -11,7 +11,7 @@ panelList = {
     "Battle Sprites": battle_sprites.BattleSpritePanel,
     "Spell Animations": spell_anims.SpellAnimationPanel,
     "Dialogue": dialogue.DialoguePanel,
-    "Dialogue Font": fonts.FontPanel,
+    "Fonts": fonts.FontPanel,
     "Item/Spell Icons": other_icons.OtherIconPanel,
     "Map Definitions": maps.MapPanel,
     "Menu Icons": menu_icons.MenuIconPanel,
