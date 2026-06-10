@@ -491,13 +491,12 @@ class BattlePanel(rompanel.ROMPanel):
 
         # Связываем View и карту
         self.zoomSlider.valueChanged.connect(self.mapViewer.changeZoom)
-        self.dispBlocksCheck.stateChanged.connect(
-            lambda state: setattr(self.mapViewer.mapViewPanel, 'drawBlocks', state == Qt.Checked))
-        self.dispFlagsCheck.stateChanged.connect(
-            lambda state: setattr(self.mapViewer.mapViewPanel, 'drawFlags', state == Qt.Checked))
+        
+        self.dispBlocksCheck.stateChanged.connect(self.onViewOptionChanged)
+        self.dispFlagsCheck.stateChanged.connect(self.onViewOptionChanged)
         self.dispGridCheck.stateChanged.connect(self.mapViewer.OnToggleGridCheck)
         self.topCheck.stateChanged.connect(self.mapViewer.OnToggleTopCheck)
-
+        
         # Подключения сигналов
         self.battleNotebook.currentChanged.connect(self.OnChangePage)
         self.addMonsterButton.clicked.connect(self.OnAddMonsterButton)
@@ -549,6 +548,19 @@ class BattlePanel(rompanel.ROMPanel):
         self.modifyMisc1Check.toggled.connect(self.OnToggleMisc1)
 
         self.printed = False
+
+    def onViewOptionChanged(self, state=None):
+        """Обновление Blocks и Flags"""
+        if not hasattr(self.mapViewer, 'mapViewPanel'):
+            return
+            
+        panel = self.mapViewer.mapViewPanel
+        panel.drawBlocks = self.dispBlocksCheck.isChecked()
+        panel.drawFlags  = self.dispFlagsCheck.isChecked()
+        
+        self.mapViewer.refreshMapView()
+        panel.update()
+        panel.repaint()
 
     # -------- Остальные методы класса (без изменений) --------
     def OnShow(self, event=None):
