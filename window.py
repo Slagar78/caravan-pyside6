@@ -124,7 +124,7 @@ class MapViewer(QWidget):
         self.setMouseTracking(True)
         if map is not None or palette is not None:
             self.changeMap(map, palette)
-
+                      
     def resizeEvent(self, event):
         super().resizeEvent(event)
         if self.inited:
@@ -285,19 +285,26 @@ class BattleMapViewer(QWidget):
         self.sideSizer = QVBoxLayout()
 
     def init(self, map, palette):
-        if self.inited: return
+        if self.inited:
+            return
         self.inited = True
+
         if map is None:
             self.curMapIdx = 0
             map = self.mainFrame.rom.data["maps"][0]
         if palette is None:
             palette = self.mainFrame.rom.data["palettes"][map.paletteIdx]
+
         self.mainPanel = QWidget(self)
         mainLayout = QVBoxLayout(self.mainPanel)
         mainLayout.setContentsMargins(0, 0, 0, 0)
+        mainLayout.setSpacing(0)
+
+        # ==================== GRID ====================
         grid = QGridLayout()
-        grid.setColumnStretch(0, 1)
-        grid.setRowStretch(0, 1)
+        grid.setContentsMargins(0, 0, 0, 0)
+        grid.setSpacing(0)
+
         self.mapViewPanel = rompanel.MapViewPanel(
             self.mainPanel, None, 24*64, 24*64, self.palette,
             scale=1, bg=16, func=self.OnClickViewPanel, edit=True, grid=24
@@ -316,16 +323,18 @@ class BattleMapViewer(QWidget):
         self.mapViewPanel.tablePen = QPen(QColor(0, 255, 255), 2)
         self.mapViewPanel.floorPen = QPen(QColor(128, 128, 128), 2)
 
-        # Ручные скроллбары – как в картах
+        # Скроллбары
         self.mapViewBarX = QScrollBar(Qt.Horizontal, self.mainPanel)
-        self.mapViewBarX.setPageStep(self.viewPageWidth*2)
+        self.mapViewBarX.setFixedHeight(18)                    # ← ФИКСИРОВАННАЯ ВЫСОТА
+        self.mapViewBarX.setPageStep(self.viewPageWidth * 2)
         self.mapViewBarX.setMaximum(63)
         self.mapViewBarX.setTracking(True)
         self.mapViewBarX.setProperty("context", "mapx")
         self.mapViewBarX.valueChanged.connect(self.OnChangeMapView)
 
         self.mapViewBarY = QScrollBar(Qt.Vertical, self.mainPanel)
-        self.mapViewBarY.setPageStep(self.viewPageHeight*2)
+        self.mapViewBarY.setFixedWidth(18)                     # ← ФИКСИРОВАННАЯ ШИРИНА
+        self.mapViewBarY.setPageStep(self.viewPageHeight * 2)
         self.mapViewBarY.setMaximum(63)
         self.mapViewBarY.setTracking(True)
         self.mapViewBarY.setProperty("context", "mapy")
@@ -339,18 +348,39 @@ class BattleMapViewer(QWidget):
         grid.addWidget(self.mapViewBarY, 0, 1)
         grid.addWidget(self.mapViewBarX, 1, 0)
         grid.addWidget(self.gridCheck, 1, 1, Qt.AlignCenter)
+
         grid.setRowStretch(0, 1)
         grid.setColumnStretch(0, 1)
+        grid.setRowStretch(1, 0)
+        grid.setRowMinimumHeight(1, 20)
+        grid.setColumnMinimumWidth(1, 20)
+
         mainLayout.addLayout(grid)
 
         frmLayout = QVBoxLayout(self)
         frmLayout.setContentsMargins(0, 0, 0, 0)
         frmLayout.addWidget(self.mainPanel, 1)
         self.setLayout(frmLayout)
+
         self.installEventFilter(self)
         self.setMouseTracking(True)
+
         if map is not None or palette is not None:
             self.changeMap(map, palette)
+
+    def OnClickViewPanel(self, event):
+        """Пустая заглушка — обязательна для MapViewPanel"""
+        pass
+
+    def OnToggleTopCheck(self, state):
+        """Для чекбокса Always on top"""
+        flags = self.windowFlags()
+        if flags & Qt.WindowStaysOnTopHint:
+            flags &= ~Qt.WindowStaysOnTopHint
+        else:
+            flags |= Qt.WindowStaysOnTopHint
+        self.setWindowFlags(flags)
+        self.show()            
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
@@ -361,9 +391,6 @@ class BattleMapViewer(QWidget):
     def OnResize(self, event):
         self.updateScrollbars()
         self.refreshMapView()
-
-    def OnChangeZoom(self, value):
-        self.changeZoom(value)
 
     def changeZoom(self, zoom):
         self.curZoom = zoom
@@ -379,25 +406,6 @@ class BattleMapViewer(QWidget):
     def OnToggleGridCheck(self, state):
         self.mapViewPanel.grid = 24 if state == Qt.Checked else False
         self.refreshMapView()
-
-    def OnToggleDispCheck(self, state):
-        self.mapViewPanel.drawBlocks = (state == Qt.Checked)
-        self.mapViewPanel.update()
-        self.refreshMapView()
-
-    def OnToggleFlagCheck(self, state):
-        self.mapViewPanel.drawFlags = (state == Qt.Checked)
-        self.mapViewPanel.update()
-        self.refreshMapView()
-
-    def OnToggleTopCheck(self, state):
-        flags = self.windowFlags()
-        if flags & Qt.WindowStaysOnTopHint:
-            flags &= ~Qt.WindowStaysOnTopHint
-        else:
-            flags |= Qt.WindowStaysOnTopHint
-        self.setWindowFlags(flags)
-        self.show()
 
     def wheelEvent(self, event: QWheelEvent):
         rt = event.angleDelta().y()
@@ -419,26 +427,28 @@ class BattleMapViewer(QWidget):
         obj = self.sender()
         if hasattr(obj, 'context'):
             if obj.context == "mapx":
-                self.oldViewX = self.curViewX
                 self.mapViewPanel.curViewX = value
             elif obj.context == "mapy":
-                self.oldViewY = self.curViewY
                 self.mapViewPanel.curViewY = value
             self.refreshMapView()
 
-    def OnClickViewPanel(self, event):
-        pass
-
     def setViewPos(self, x, y):
+        if not self.map or not self.mapViewPanel:
+            return
         s = self.mapViewPanel.scale
         maxX = self.map.width * 24
         maxY = self.map.height * 24
         sizeX = self.mapViewPanel.size().width()
         sizeY = self.mapViewPanel.size().height()
+
         self.mapViewPanel.curViewX = max(0, min(maxX - sizeX / s, x))
         self.mapViewPanel.curViewY = max(0, min(maxY - sizeY / s, y))
-        self.mapViewBarX.setValue(x)
-        self.mapViewBarY.setValue(y)
+
+        # Синхронизация скроллбаров
+        self.mapViewBarX.setValue(int(self.mapViewPanel.curViewX))
+        self.mapViewBarY.setValue(int(self.mapViewPanel.curViewY))
+
+        self.refreshMapView()
 
     def centerViewPos(self, x, y):
         sizeX = self.mapViewPanel.size().width()
@@ -463,7 +473,7 @@ class BattleMapViewer(QWidget):
                 self.getContentPanel().rom.getMaps(self.curMapIdx, self.curMapIdx)
             self.mapViewPanel.changeMap(self.map, self.palette)
             s = self.scales[self.curZoom]
-            self.mapViewPanel.setMaximumWidth(int(self.map.width * 24 * s))   # ← ГЛАВНАЯ СТРОКА
+            self.mapViewPanel.setMaximumWidth(int(self.map.width * 24 * s))
             self.mapViewPanel.curViewX = 0
             self.mapViewPanel.curViewY = 0
             self.mapViewPanel.update()
@@ -471,23 +481,30 @@ class BattleMapViewer(QWidget):
             self.updateScrollbars()
 
     def updateScrollbars(self):
+        if not hasattr(self, 'map') or self.map is None or not self.mapViewPanel:
+            return
         s = self.mapViewPanel.scale
-        x = self.mapViewPanel.size().width() / s
-        y = self.mapViewPanel.size().height() / s
-        self.mapViewBarX.setPageStep(x)
-        h_max = max(0, self.map.width * 24 - x)
-        self.mapViewBarX.setMaximum(h_max)
-        self.mapViewBarX.setVisible(h_max > 0)
-        self.mapViewBarY.setPageStep(y)
-        self.mapViewBarY.setMaximum(self.map.height * 24 - y)
+        viewport_w = self.mapViewPanel.size().width()
+        viewport_h = self.mapViewPanel.size().height()
 
-    curViewX = property(lambda self: self.mapViewPanel.curViewX)
-    curViewY = property(lambda self: self.mapViewPanel.curViewY)
+        # Горизонтальный
+        h_max = max(0, int(self.map.width * 24 - viewport_w / s))
+        self.mapViewBarX.setMaximum(h_max)
+        self.mapViewBarX.setPageStep(max(10, int(viewport_w / s)))
+        self.mapViewBarX.setValue(int(self.mapViewPanel.curViewX))
+        self.mapViewBarX.setVisible(h_max > 0)
+
+        # Вертикальный
+        v_max = max(0, int(self.map.height * 24 - viewport_h / s))
+        self.mapViewBarY.setMaximum(v_max)
+        self.mapViewBarY.setPageStep(max(10, int(viewport_h / s)))
+        self.mapViewBarY.setValue(int(self.mapViewPanel.curViewY))
+        self.mapViewBarY.setVisible(v_max > 0)
 
     def getContentPanel(self):
         return self.parent
 
-    # ---------- методы битв ----------
+    # ---------- Битвенные методы ----------
     def mousePressEvent(self, event: QMouseEvent):
         if not self.inited: return
         obj = self.mapViewPanel
@@ -503,7 +520,7 @@ class BattleMapViewer(QWidget):
         if button == Qt.MiddleButton:
             self.viewDownX = x; self.viewDownY = y
             obj.setFocus(); event.accept(); return
-        battle = cont.curBattle; idx = blockY*64 + blockX; blk = self.map.layoutData[idx]
+        battle = cont.curBattle
         if self.viewerContext == consts.VC_BATTLE_UNITS:
             if button == Qt.LeftButton:
                 bx = blockX - battle.map_x1; by = blockY - battle.map_y1
@@ -565,7 +582,7 @@ class BattleMapViewer(QWidget):
                 if button == Qt.LeftButton:
                     region = battle.regions[cont.curRegionIdx]
                     bpt = [blockX - battle.map_x1, blockY - battle.map_y1]
-                    if bpt == region.p1:   self.isDragging = 1
+                    if bpt == region.p1: self.isDragging = 1
                     elif bpt == region.p2: self.isDragging = 2
                     elif bpt == region.p3: self.isDragging = 3
                     elif bpt == region.p4: self.isDragging = 4
@@ -663,3 +680,7 @@ class BattleMapViewer(QWidget):
             self.mapViewPanel.drawFunc = self.drawBattleUnits
             self.passes = []
             self.curEditText.setText(self.vcTexts[self.viewerContext])
+
+    # === КРИТИЧНЫЕ СВОЙСТВА ===
+    curViewX = property(lambda self: self.mapViewPanel.curViewX)
+    curViewY = property(lambda self: self.mapViewPanel.curViewY)
