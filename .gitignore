@@ -2,6 +2,8 @@
 __pycache__/
 *.py[cod]
 *.pyo
+build
+*.spec
 
 # Виртуальное окружение
 venv/
