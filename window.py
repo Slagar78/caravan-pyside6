@@ -427,17 +427,18 @@ class BattleMapViewer(QWidget):
         event.accept()
 
     def OnChangeMapView(self, value):
-        if not hasattr(self, 'mapViewPanel'):
-            return
-            
         obj = self.sender()
-        if hasattr(obj, 'context'):
-            if obj.context == "mapx":
-                self.mapViewPanel.curViewX = value
-            elif obj.context == "mapy":
-                self.mapViewPanel.curViewY = value
+        print("SCROLL:", obj, obj.property("context"), value)
 
-            self.setViewPos(self.mapViewPanel.curViewX, self.mapViewPanel.curViewY)
+        context = obj.property("context")
+
+        if context == "mapx":
+            self.mapViewPanel.curViewX = value
+
+        elif context == "mapy":
+            self.mapViewPanel.curViewY = value
+
+        self.refreshMapView()
 
     def setViewPos(self, x, y):
         if not self.map or not self.mapViewPanel:

@@ -580,11 +580,11 @@ class BattlePanel(rompanel.ROMPanel):
         curTerLayout.addStretch()
         terrainLayout.addLayout(curTerLayout)
 
-        # Move cost table - уменьшили размер
+        # Move cost table
         self.terrainInfoGrid = QTableWidget(13, 9)
         self.terrainInfoGrid.horizontalHeader().setVisible(False)
         self.terrainInfoGrid.verticalHeader().setVisible(False)
-        self.terrainInfoGrid.setFixedSize(245, 260)   # компактнее
+        self.terrainInfoGrid.setFixedSize(245, 260)
 
         movetypes = ["Free", "Foot", "Horse", "Fast", "Tires", "Fly", "Float", "Water",
                      "Foot2", "Horse2", "Fast2", "Foot3", "Foot4"]
