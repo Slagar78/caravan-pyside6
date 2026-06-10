@@ -63,8 +63,8 @@ class FontPanel(rompanel.ROMPanel):
                 scale=2
             )
             sp.glyph = g
-            # Подключаем клик через атрибут func, который ожидает rompanel.SpritePanel
-            sp.func = lambda event, p=sp: self.OnChooseGlyph(p)
+            # Прямое переназначение обработчика клика
+            sp.mousePressEvent = lambda event, p=sp: self.OnChooseGlyph(p)
             self.glyphPanels.append(sp)
             sbs2_layout.addWidget(sp, row, col)
             col += 1
