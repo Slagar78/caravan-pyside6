@@ -468,11 +468,21 @@ class BattlePanel(rompanel.ROMPanel):
         self.mapViewer = window.BattleMapViewer(self, None, self)
         self.mapViewer.init(None, None)
         self.mapViewer.mapViewPanel.drawFlags = False
-        self.mapViewer.mapViewPanel.setMinimumSize(0, 0)
-        self.mapViewer.mapViewPanel.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        if hasattr(self.mapViewer, 'mainPanel'):
+
+        # === ИСПРАВЛЕНИЯ ДЛЯ ГОРИЗОНТАЛЬНОГО ПОЛЗУНКА ===
+        if hasattr(self.mapViewer, 'scrollArea') and self.mapViewer.scrollArea:
+            sa = self.mapViewer.scrollArea
+            sa.setWidgetResizable(False)
+            sa.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+            sa.setMaximumWidth(999999)          # снимаем искусственное ограничение
+            sa.setMaximumHeight(999999)
+            sa.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+            sa.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+
+        if hasattr(self.mapViewer, 'mainPanel') and self.mapViewer.mainPanel:
             self.mapViewer.mainPanel.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
 
+        # Добавляем карту в центральную панель с растяжением
         centralLayout.addWidget(self.mapViewer, 1)
 
         # Добавляем battleNotebook в правую панель
@@ -488,9 +498,8 @@ class BattlePanel(rompanel.ROMPanel):
         mainLayout.setContentsMargins(1, 1, 1, 1)
         mainLayout.setSpacing(1)
         mainLayout.addWidget(leftPanel)
-        mainLayout.addWidget(centralPanel, 1)
+        mainLayout.addWidget(centralPanel, 1)      # 1 = stretch
         mainLayout.addWidget(rightPanel)
-
         self.sizer.addLayout(mainLayout, 0, 0, 1, 1)
 
         # Связываем View и карту
