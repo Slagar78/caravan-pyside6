@@ -19,6 +19,10 @@ app = QApplication(sys.argv)
 app.setStyle(QStyleFactory.create('Fusion'))
 icon = QIcon("caravan.ico")
 
+import sys, os
+if getattr(sys, 'frozen', False):
+    os.chdir(sys._MEIPASS)
+
 import asm, settings
 import rom, panellist, rompanel, changelog, window, consts, util, temp, layout
 
@@ -153,6 +157,9 @@ class MainFrame(window.CaravanParentFrame):
         self.app = app
         self.rom = None
         self.settings = settings.init("caravan.cfg")
+        
+        if not hasattr(self.settings, 'lastRomDir'):
+            self.settings.lastRomDir = os.path.expanduser("~")
 
         self.filename = ""
         self.dirname = ""
@@ -257,8 +264,18 @@ class MainFrame(window.CaravanParentFrame):
 
         dlg = QFileDialog(self, "Open Shining Force 2 ROM (.BIN)", "", "*.bin")
         dlg.setFileMode(QFileDialog.ExistingFile)
-        datadlg = QFileDialog(self, "Open External Data File", "", "*.txt;*.dat")
+        dlg.setOptions(QFileDialog.DontUseNativeDialog)
+        dlg.setDirectory(self.settings.lastRomDir)
+
+        datadlg = QFileDialog(
+            self,
+            "Open External Data File",
+            "",
+            "Data Files (*.txt *.dat)"
+        )
         datadlg.setFileMode(QFileDialog.ExistingFile)
+        datadlg.setOptions(QFileDialog.DontUseNativeDialog)
+        datadlg.setDirectory(self.settings.lastRomDir)
 
         validROM = False
         validDF = False
@@ -269,6 +286,8 @@ class MainFrame(window.CaravanParentFrame):
 
             self.filename = dlg.selectedFiles()[0].split('/')[-1]
             self.dirname = os.path.dirname(dlg.selectedFiles()[0])
+            self.settings.lastRomDir = self.dirname
+            datadlg.setDirectory(self.dirname)
             fn = pathjoin(self.dirname, self.filename)
 
             # Открываем файл и проверяем сигнатуру (как в оригинале)
@@ -329,6 +348,8 @@ class MainFrame(window.CaravanParentFrame):
                                         "Please select a location to save the expanded ROM.")
                 saveDlg = QFileDialog(self, "Save Shining Force 2 ROM (.BIN) As", "", "*.bin")
                 saveDlg.setAcceptMode(QFileDialog.AcceptSave)
+                saveDlg.setOptions(QFileDialog.DontUseNativeDialog)
+                saveDlg.setDirectory(self.dirname if self.dirname else os.path.expanduser("~"))  # ← стартовая папка
                 if saveDlg.exec() == QDialog.Accepted:
                     path = saveDlg.selectedFiles()[0]
                 else:
@@ -368,6 +389,8 @@ class MainFrame(window.CaravanParentFrame):
     def OnSaveAs(self):
         dlg = QFileDialog(self, "Save Shining Force 2 ROM (.BIN) As", "", "*.bin")
         dlg.setAcceptMode(QFileDialog.AcceptSave)
+        dlg.setOptions(QFileDialog.DontUseNativeDialog)
+        dlg.setDirectory(self.settings.lastRomDir)
         if dlg.exec() == QDialog.Accepted:
             fn = dlg.selectedFiles()[0].split('/')[-1]
             dn = os.path.dirname(dlg.selectedFiles()[0])
