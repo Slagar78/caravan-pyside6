@@ -367,6 +367,9 @@ class BattleMapViewer(QWidget):
 
         if map is not None or palette is not None:
             self.changeMap(map, palette)
+            
+        self.mapViewBarX.raise_()
+        self.mapViewBarY.raise_()
 
     def OnClickViewPanel(self, event):
         """Пустая заглушка — обязательна для MapViewPanel"""
@@ -424,29 +427,37 @@ class BattleMapViewer(QWidget):
         event.accept()
 
     def OnChangeMapView(self, value):
+        if not hasattr(self, 'mapViewPanel'):
+            return
+            
         obj = self.sender()
         if hasattr(obj, 'context'):
             if obj.context == "mapx":
                 self.mapViewPanel.curViewX = value
             elif obj.context == "mapy":
                 self.mapViewPanel.curViewY = value
-            self.refreshMapView()
+
+            self.setViewPos(self.mapViewPanel.curViewX, self.mapViewPanel.curViewY)
 
     def setViewPos(self, x, y):
         if not self.map or not self.mapViewPanel:
             return
+            
         s = self.mapViewPanel.scale
         maxX = self.map.width * 24
         maxY = self.map.height * 24
         sizeX = self.mapViewPanel.size().width()
         sizeY = self.mapViewPanel.size().height()
 
-        self.mapViewPanel.curViewX = max(0, min(maxX - sizeX / s, x))
-        self.mapViewPanel.curViewY = max(0, min(maxY - sizeY / s, y))
+        newX = max(0, min(maxX - sizeX / s, x))
+        newY = max(0, min(maxY - sizeY / s, y))
 
-        # Синхронизация скроллбаров
-        self.mapViewBarX.setValue(int(self.mapViewPanel.curViewX))
-        self.mapViewBarY.setValue(int(self.mapViewPanel.curViewY))
+        self.mapViewPanel.curViewX = newX
+        self.mapViewPanel.curViewY = newY
+
+        # Обновляем скроллбары
+        self.mapViewBarX.setValue(int(newX))
+        self.mapViewBarY.setValue(int(newY))
 
         self.refreshMapView()
 
@@ -500,132 +511,229 @@ class BattleMapViewer(QWidget):
         self.mapViewBarY.setPageStep(max(10, int(viewport_h / s)))
         self.mapViewBarY.setValue(int(self.mapViewPanel.curViewY))
         self.mapViewBarY.setVisible(v_max > 0)
+        
+        self.mapViewBarX.raise_()
+        self.mapViewBarY.raise_()
 
     def getContentPanel(self):
         return self.parent
 
     # ---------- Битвенные методы ----------
     def mousePressEvent(self, event: QMouseEvent):
-        if not self.inited: return
+        if not self.inited:
+            return
+
+        # === ПРИОРИТЕТ СКРОЛЛБАРАМ ===
+        widget = self.childAt(event.pos())
+        if widget is self.mapViewBarX or widget is self.mapViewBarY:
+            if widget is self.mapViewBarX:
+                self.mapViewBarX.mousePressEvent(event)
+            else:
+                self.mapViewBarY.mousePressEvent(event)
+            return
+
+        # === ОБРАБОТКА КЛИКА ПО КАРТЕ ===
         obj = self.mapViewPanel
         x = event.pos().x()
         y = event.pos().y()
         blockX = int(max(0, min(self.map.width-1, (x / obj.scale + self.curViewX) / 24)))
         blockY = int(max(0, min(self.map.height-1, (y / obj.scale + self.curViewY) / 24)))
+
         cont = self.getContentPanel()
         if blockX != self.mouseBlockX or blockY != self.mouseBlockY:
-            self.mouseBlockX = blockX; self.mouseBlockY = blockY
+            self.mouseBlockX = blockX
+            self.mouseBlockY = blockY
             self.mousePosText.setText(f"({blockX},{blockY})")
-        button = event.button(); modifiers = event.modifiers()
+
+        button = event.button()
+        modifiers = event.modifiers()
+
         if button == Qt.MiddleButton:
-            self.viewDownX = x; self.viewDownY = y
-            obj.setFocus(); event.accept(); return
+            self.viewDownX = x
+            self.viewDownY = y
+            obj.setFocus()
+            event.accept()
+            return
+
         battle = cont.curBattle
+
         if self.viewerContext == consts.VC_BATTLE_UNITS:
             if button == Qt.LeftButton:
-                bx = blockX - battle.map_x1; by = blockY - battle.map_y1
+                bx = blockX - battle.map_x1
+                by = blockY - battle.map_y1
                 if modifiers & Qt.ShiftModifier:
                     for g, con in enumerate(cont.allGroupData):
                         for i, u in enumerate(con):
                             if u.x == bx and u.y == by and u is not cont.curUnit:
-                                cont.changeUnit(g, i); event.accept(); return
+                                cont.changeUnit(g, i)
+                                event.accept()
+                                return
                 else:
-                    cont.curUnit.x = bx; cont.curUnit.y = by
-                    cont.modifyXCtrl.setValue(bx); cont.modifyYCtrl.setValue(by)
-                    cont.modify(); self.refreshMapView()
+                    cont.curUnit.x = bx
+                    cont.curUnit.y = by
+                    cont.modifyXCtrl.setValue(bx)
+                    cont.modifyYCtrl.setValue(by)
+                    cont.modify()
+                    self.refreshMapView()
             elif button == Qt.RightButton:
-                bx = blockX - battle.map_x1; by = blockY - battle.map_y1
+                bx = blockX - battle.map_x1
+                by = blockY - battle.map_y1
                 swap = None
-                for con in cont.allGroupData:
-                    for u in con:
+                for con_ in cont.allGroupData:
+                    for u in con_:
                         if u.x == bx and u.y == by and u is not cont.curUnit:
-                            swap = u; break
+                            swap = u
+                            break
                     if swap: break
                 if swap:
                     if modifiers & Qt.ShiftModifier:
-                        if cont.curUnitContext == 2: cont.changeUnitIdx(swap.idx)
-                        elif cont.curUnitContext == 0: cont.changeUnitIdx(swap.idx-64)
-                        else: event.ignore(); return
+                        if cont.curUnitContext == 2:
+                            cont.changeUnitIdx(swap.idx)
+                        elif cont.curUnitContext == 0:
+                            cont.changeUnitIdx(swap.idx - 64)
+                        else:
+                            event.ignore()
+                            return
                     else:
-                        swap.x = cont.curUnit.x; swap.y = cont.curUnit.y
-                        cont.curUnit.x = bx; cont.curUnit.y = by
-                        cont.modifyXCtrl.setValue(bx); cont.modifyYCtrl.setValue(by)
-                    cont.modify(); self.refreshMapView()
+                        swap.x = cont.curUnit.x
+                        swap.y = cont.curUnit.y
+                        cont.curUnit.x = bx
+                        cont.curUnit.y = by
+                        cont.modifyXCtrl.setValue(bx)
+                        cont.modifyYCtrl.setValue(by)
+                    cont.modify()
+                    self.refreshMapView()
             event.accept()
+
         elif self.viewerContext == consts.VC_BATTLE_BOUNDS:
             if button == Qt.LeftButton:
-                diffX = blockX - battle.map_x1; diffY = blockY - battle.map_y1
-                battle.map_x1 = blockX; battle.map_y1 = blockY
+                diffX = blockX - battle.map_x1
+                diffY = blockY - battle.map_y1
+                battle.map_x1 = blockX
+                battle.map_y1 = blockY
                 if not (modifiers & Qt.ShiftModifier):
                     for con in cont.allGroupData:
-                        for unit in con: unit.x -= diffX; unit.y -= diffY
-                    cont.modifyXCtrl.setValue(cont.curUnit.x); cont.modifyYCtrl.setValue(cont.curUnit.y)
-                if modifiers & Qt.ControlModifier: battle.map_x2 += diffX; battle.map_y2 += diffY
+                        for unit in con:
+                            unit.x -= diffX
+                            unit.y -= diffY
+                    cont.modifyXCtrl.setValue(cont.curUnit.x)
+                    cont.modifyYCtrl.setValue(cont.curUnit.y)
+                if modifiers & Qt.ControlModifier:
+                    battle.map_x2 += diffX
+                    battle.map_y2 += diffY
             elif button == Qt.RightButton:
-                diffX = blockX - battle.map_x2 + 1; diffY = blockY - battle.map_y2 + 1
-                battle.map_x2 = blockX+1; battle.map_y2 = blockY+1
+                diffX = blockX - battle.map_x2 + 1
+                diffY = blockY - battle.map_y2 + 1
+                battle.map_x2 = blockX + 1
+                battle.map_y2 = blockY + 1
                 if modifiers & Qt.ShiftModifier:
                     for con in cont.allGroupData:
-                        for unit in con: unit.x += diffX; unit.y += diffY
-                    cont.modifyXCtrl.setValue(cont.curUnit.x); cont.modifyYCtrl.setValue(cont.curUnit.y)
+                        for unit in con:
+                            unit.x += diffX
+                            unit.y += diffY
+                    cont.modifyXCtrl.setValue(cont.curUnit.x)
+                    cont.modifyYCtrl.setValue(cont.curUnit.y)
                 if modifiers & Qt.ControlModifier:
                     for con in cont.allGroupData:
-                        for unit in con: unit.x -= diffX; unit.y -= diffY
-                    battle.map_x1 += diffX; battle.map_y1 += diffY
-            else: event.ignore(); return
-            cont.boundsXCtrl.setValue(battle.map_x1); cont.boundsYCtrl.setValue(battle.map_y1)
-            cont.boundsX2Ctrl.setValue(battle.map_x2); cont.boundsY2Ctrl.setValue(battle.map_y2)
-            obj.update(); cont.modify(); self.refreshMapView()
+                        for unit in con:
+                            unit.x -= diffX
+                            unit.y -= diffY
+                    battle.map_x1 += diffX
+                    battle.map_y1 += diffY
+            else:
+                event.ignore()
+                return
+            cont.boundsXCtrl.setValue(battle.map_x1)
+            cont.boundsYCtrl.setValue(battle.map_y1)
+            cont.boundsX2Ctrl.setValue(battle.map_x2)
+            cont.boundsY2Ctrl.setValue(battle.map_y2)
+            obj.update()
+            cont.modify()
+            self.refreshMapView()
             event.accept()
+
         elif self.viewerContext == consts.VC_BATTLE_AI_ZONES:
             if battle.regions:
                 if button == Qt.LeftButton:
                     region = battle.regions[cont.curRegionIdx]
                     bpt = [blockX - battle.map_x1, blockY - battle.map_y1]
-                    if bpt == region.p1: self.isDragging = 1
-                    elif bpt == region.p2: self.isDragging = 2
-                    elif bpt == region.p3: self.isDragging = 3
-                    elif bpt == region.p4: self.isDragging = 4
-                    else: self.isDragging = False
-                else: self.isDragging = False
+                    if bpt == region.p1:
+                        self.isDragging = 1
+                    elif bpt == region.p2:
+                        self.isDragging = 2
+                    elif bpt == region.p3:
+                        self.isDragging = 3
+                    elif bpt == region.p4:
+                        self.isDragging = 4
+                    else:
+                        self.isDragging = False
+                else:
+                    self.isDragging = False
                 if self.isDragging:
                     region = battle.regions[cont.curRegionIdx]
                     bpt = [blockX - battle.map_x1, blockY - battle.map_y1]
-                    if self.isDragging == 1: cont.changeRegionX(bpt[0]); cont.changeRegionY(bpt[1])
-                    elif self.isDragging == 2: cont.changeRegionX2(bpt[0]); cont.changeRegionY2(bpt[1])
-                    elif self.isDragging == 3: cont.changeRegionX3(bpt[0]); cont.changeRegionY3(bpt[1])
-                    elif self.isDragging == 4: cont.changeRegionX4(bpt[0]); cont.changeRegionY4(bpt[1])
+                    if self.isDragging == 1:
+                        cont.changeRegionX(bpt[0])
+                        cont.changeRegionY(bpt[1])
+                    elif self.isDragging == 2:
+                        cont.changeRegionX2(bpt[0])
+                        cont.changeRegionY2(bpt[1])
+                    elif self.isDragging == 3:
+                        cont.changeRegionX3(bpt[0])
+                        cont.changeRegionY3(bpt[1])
+                    elif self.isDragging == 4:
+                        cont.changeRegionX4(bpt[0])
+                        cont.changeRegionY4(bpt[1])
             if battle.points and button == Qt.RightButton:
                 bpt = [blockX - battle.map_x1, blockY - battle.map_y1]
-                cont.changePointX(bpt[0]); cont.changePointY(bpt[1])
+                cont.changePointX(bpt[0])
+                cont.changePointY(bpt[1])
             event.accept()
+
         elif self.viewerContext == consts.VC_BATTLE_TERRAIN:
             if button == Qt.LeftButton:
                 if battle.map_x1 <= blockX <= battle.map_x2 and battle.map_y1 <= blockY <= battle.map_y2:
-                    realX = blockX - battle.map_x1; realY = blockY - battle.map_y1
-                    rawIdx = realY * 48 + realX; tileIdx = rawIdx // 32
-                    rowIdx = (rawIdx % 32) // 4; strIdx = (rawIdx % 4) * 2
+                    realX = blockX - battle.map_x1
+                    realY = blockY - battle.map_y1
+                    rawIdx = realY * 48 + realX
+                    tileIdx = rawIdx // 32
+                    rowIdx = (rawIdx % 32) // 4
+                    strIdx = (rawIdx % 4) * 2
                     if not (modifiers & Qt.ShiftModifier):
                         row = battle.terrain.tiles[tileIdx].pixels[rowIdx]
                         row = row[:strIdx] + hex(cont.curTerrainType)[2:].zfill(2) + row[strIdx+2:]
                         battle.terrain.tiles[tileIdx].pixels[rowIdx] = row
-                        obj.update(); cont.modify(); self.refreshMapView()
+                        obj.update()
+                        cont.modify()
+                        self.refreshMapView()
                     else:
                         tt = int(battle.terrain.tiles[tileIdx].pixels[rowIdx][strIdx:strIdx+2], 16)
                         cont.changeTerrainType(min(len(cont.terrainIcons)-1, tt))
             event.accept()
+
         else:
             QWidget.mousePressEvent(self, event)
 
     def mouseMoveEvent(self, event: QMouseEvent):
-        if not self.inited: return
-        if event.buttons() & Qt.MiddleButton:
-            QWidget.mouseMoveEvent(self, event)
-            return
-        if self.viewerContext in [consts.VC_BATTLE_AI_ZONES, consts.VC_AREA] and self.isDragging:
-            pass
-        else:
-            QWidget.mouseMoveEvent(self, event)
+            if not self.inited:
+                return
+
+            widget = self.childAt(event.pos())
+            if widget is self.mapViewBarX or widget is self.mapViewBarY:
+                if widget is self.mapViewBarX:
+                    self.mapViewBarX.mouseMoveEvent(event)
+                else:
+                    self.mapViewBarY.mouseMoveEvent(event)
+                return
+
+            if event.buttons() & Qt.MiddleButton:
+                QWidget.mouseMoveEvent(self, event)
+                return
+
+            if self.viewerContext in [consts.VC_BATTLE_AI_ZONES, consts.VC_AREA] and self.isDragging:
+                pass
+            else:
+                QWidget.mouseMoveEvent(self, event)
 
     def drawBattleUnits(self, painter, tx, ty, ox, oy):
         cont = self.getContentPanel(); battle = cont.curBattle
