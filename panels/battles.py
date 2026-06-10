@@ -3,10 +3,10 @@ from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel,
     QPushButton, QComboBox, QSpinBox, QRadioButton, QCheckBox,
     QScrollArea, QTabWidget, QTableWidget, QTableWidgetItem,
-    QGroupBox, QSizePolicy, QSlider
+    QGroupBox, QSizePolicy, QSlider, QFrame
 )
-from PySide6.QtCore import Qt, QTimer
-from PySide6.QtGui import QPixmap, QColor, QBrush, QIcon, QFont
+from PySide6.QtCore import Qt, QTimer, QSize
+from PySide6.QtGui import QPixmap, QColor, QBrush, QIcon
 import rompanel
 import data
 import window, consts
@@ -25,6 +25,9 @@ class BattlePanel(rompanel.ROMPanel):
     canMaximize = True
     frameTitle = "Battle Editor"
 
+    def sizeHint(self):
+        return QSize(1280, 800)
+
     def init(self):
         self.palette = self.rom.getDataByName("palettes", "Sprite & UI Palette")
         self.frame = 0
@@ -37,15 +40,29 @@ class BattlePanel(rompanel.ROMPanel):
         self.curRegionIdx = 0
         self.curPointIdx = 0
 
-        # ========================
-        # --- Левая вертикальная панель ---
-        # ========================
+        # Тёмная тема
+        self.setStyleSheet("""
+            QGroupBox { font-weight: bold; border: 1px solid #555; border-radius: 2px; margin-top: 0.5em; padding-top: 0.3em; }
+            QGroupBox::title { subcontrol-origin: margin; left: 10px; padding: 0 3px 0 3px; }
+            QPushButton { background-color: #4A4A4D; color: #E0E0E0; border: none; padding: 2px 6px; border-radius: 2px; }
+            QPushButton:hover { background-color: #5A5A5D; }
+            QPushButton:pressed { background-color: #3A3A3D; }
+            QRadioButton, QCheckBox { color: #E0E0E0; }
+            QComboBox, QSpinBox { background-color: #4A4A4D; color: #E0E0E0; border: 1px solid #555; padding: 1px 3px; }
+            QTabWidget::pane { border: 1px solid #555; background-color: #3C3C41; }
+            QTabBar::tab { background-color: #333337; color: #E0E0E0; padding: 4px 8px; border: 1px solid #555; border-bottom: none; }
+            QTabBar::tab:selected { background-color: #4A4A4D; }
+            QScrollBar:horizontal, QScrollBar:vertical { background-color: #2D2D30; width: 8px; }
+            QScrollBar::handle:horizontal, QScrollBar::handle:vertical { background-color: #555; min-height: 20px; }
+            QScrollBar::handle:horizontal:hover, QScrollBar::handle:vertical:hover { background-color: #777; }
+        """)
+
+        # Левая панель – только Entities
         leftPanel = QWidget()
         leftLayout = QVBoxLayout(leftPanel)
         leftLayout.setContentsMargins(1, 1, 1, 1)
         leftLayout.setSpacing(1)
 
-        # --- Entities ---
         entitiesGroup = QGroupBox("Entities")
         entitiesLayout = QVBoxLayout(entitiesGroup)
         entitiesLayout.setContentsMargins(1, 1, 1, 1)
@@ -53,8 +70,8 @@ class BattlePanel(rompanel.ROMPanel):
 
         self.scrollWnd = QScrollArea()
         self.scrollWnd.setWidgetResizable(True)
-        self.scrollWnd.setMinimumWidth(180)
-        self.scrollWnd.setMinimumHeight(80)
+        self.scrollWnd.setMinimumWidth(160)
+        self.scrollWnd.setMinimumHeight(60)
         self.scrollWnd.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
 
         scrollWidget = QWidget()
@@ -111,12 +128,12 @@ class BattlePanel(rompanel.ROMPanel):
 
         scrollButtonSizer = QHBoxLayout()
         scrollButtonSizer.setSpacing(2)
-        self.addMonsterButton = QPushButton("Monster")
-        self.addForceButton = QPushButton("Force")
+        self.addMonsterButton = QPushButton("Mstr")
+        self.addForceButton = QPushButton("Frc")
         self.addNPCButton = QPushButton("NPC")
-        self.addMonsterButton.setFixedSize(50, 18)
-        self.addForceButton.setFixedSize(45, 18)
-        self.addNPCButton.setFixedSize(35, 18)
+        self.addMonsterButton.setFixedSize(35, 16)
+        self.addForceButton.setFixedSize(30, 16)
+        self.addNPCButton.setFixedSize(30, 16)
         scrollButtonSizer.addWidget(lblAdd)
         scrollButtonSizer.addWidget(self.addMonsterButton)
         scrollButtonSizer.addWidget(self.addForceButton)
@@ -124,12 +141,42 @@ class BattlePanel(rompanel.ROMPanel):
 
         entitiesLayout.addWidget(self.scrollWnd)
         entitiesLayout.addLayout(scrollButtonSizer)
+        leftLayout.addWidget(entitiesGroup)
 
-        # --- Entity Properties ---
-        modifyGroup = QGroupBox("Properties")
-        modifySizer = QVBoxLayout(modifyGroup)
-        modifySizer.setContentsMargins(1, 1, 1, 1)
-        modifySizer.setSpacing(1)
+        # Центральная область – тулбар + карта
+        centralPanel = QWidget()
+        centralLayout = QVBoxLayout(centralPanel)
+        centralLayout.setContentsMargins(0, 0, 0, 0)
+        centralLayout.setSpacing(0)
+
+        toolbar = QFrame()
+        toolbar.setFixedHeight(28)
+        toolbar.setStyleSheet("background-color: #3C3C41;")
+        toolbarLayout = QHBoxLayout(toolbar)
+        toolbarLayout.setContentsMargins(4, 2, 4, 2)
+        toolbarLayout.setSpacing(4)
+
+        self.smartPathsCheck = QCheckBox("Smart Paths")
+        self.gridCheck = QCheckBox("Grid")
+        self.gridCheck.setChecked(True)
+        self.borderCheck = QCheckBox("Border")
+        self.borderCheck.setChecked(True)
+        toolbarLayout.addWidget(self.smartPathsCheck)
+        toolbarLayout.addWidget(self.gridCheck)
+        toolbarLayout.addWidget(self.borderCheck)
+        toolbarLayout.addStretch()
+
+        centralLayout.addWidget(toolbar)
+
+        # Правая панель – инспектор
+        rightPanel = QTabWidget()
+        rightPanel.setFixedWidth(280)
+
+        # Properties
+        propTab = QWidget()
+        propLayout = QVBoxLayout(propTab)
+        propLayout.setContentsMargins(2, 2, 2, 2)
+        propLayout.setSpacing(2)
 
         animRow = QHBoxLayout()
         animRow.setSpacing(2)
@@ -140,7 +187,7 @@ class BattlePanel(rompanel.ROMPanel):
         self.modifyFacingDownRadio = QRadioButton()
         self.modifyFacingRightRadio.setChecked(True)
         self.modifyDeleteButton = QPushButton("Del")
-        self.modifyDeleteButton.setFixedSize(25, 18)
+        self.modifyDeleteButton.setFixedSize(22, 16)
 
         facingGrid = QGridLayout()
         facingGrid.setSpacing(0)
@@ -152,7 +199,7 @@ class BattlePanel(rompanel.ROMPanel):
         animRow.addWidget(self.modifyAnimPanel)
         animRow.addLayout(facingGrid)
         animRow.addWidget(self.modifyDeleteButton)
-        modifySizer.addLayout(animRow)
+        propLayout.addLayout(animRow)
 
         grid = QGridLayout()
         grid.setSpacing(2)
@@ -204,13 +251,15 @@ class BattlePanel(rompanel.ROMPanel):
         grid.addWidget(self.gotoAllyRadio, 3, 3)
         grid.addWidget(self.gotoList, 3, 6)
 
-        modifySizer.addLayout(grid)
+        propLayout.addLayout(grid)
+        propLayout.addStretch()
+        rightPanel.addTab(propTab, "Properties")
 
-        # --- View ---
-        viewGroup = QGroupBox("View")
-        viewSizer = QVBoxLayout(viewGroup)
-        viewSizer.setContentsMargins(1, 1, 1, 1)
-        viewSizer.setSpacing(2)
+        # View
+        viewTab = QWidget()
+        viewLayout = QVBoxLayout(viewTab)
+        viewLayout.setContentsMargins(2, 2, 2, 2)
+        viewLayout.setSpacing(2)
 
         self.mousePosLabel = QLabel("Mouse: (0,0)")
         self.curZoomLabel = QLabel("Zoom: 100%")
@@ -229,154 +278,159 @@ class BattlePanel(rompanel.ROMPanel):
         self.topCheck = QCheckBox("Always on top")
         self.dragCheck = QCheckBox("Alt drag mode")
 
-        viewSizer.addWidget(self.mousePosLabel)
-        viewSizer.addWidget(self.curZoomLabel)
-        viewSizer.addWidget(self.curEditLabel)
-        viewSizer.addWidget(QLabel("Zoom:"))
-        viewSizer.addWidget(self.zoomSlider)
-        viewSizer.addWidget(QLabel("Display:"))
-        viewSizer.addWidget(self.dispBlocksCheck)
-        viewSizer.addWidget(self.dispFlagsCheck)
-        viewSizer.addWidget(self.dispGridCheck)
-        viewSizer.addWidget(self.topCheck)
-        viewSizer.addWidget(self.dragCheck)
+        viewLayout.addWidget(self.mousePosLabel)
+        viewLayout.addWidget(self.curZoomLabel)
+        viewLayout.addWidget(self.curEditLabel)
+        viewLayout.addWidget(QLabel("Zoom:"))
+        viewLayout.addWidget(self.zoomSlider)
+        viewLayout.addWidget(QLabel("Display:"))
+        viewLayout.addWidget(self.dispBlocksCheck)
+        viewLayout.addWidget(self.dispFlagsCheck)
+        viewLayout.addWidget(self.dispGridCheck)
+        viewLayout.addWidget(self.topCheck)
+        viewLayout.addWidget(self.dragCheck)
+        viewLayout.addStretch()
+        rightPanel.addTab(viewTab, "View")
 
-        # --- Сборка левой панели ---
-        leftLayout.addWidget(entitiesGroup)
-        leftLayout.addWidget(modifyGroup)
-        leftLayout.addWidget(viewGroup)
-        leftLayout.addStretch()
-
-        # --- Battle properties (вкладки) ---
-        battleGroup = QGroupBox("Battle Properties")
-        battleLayout = QVBoxLayout(battleGroup)
-        battleLayout.setContentsMargins(1, 1, 1, 1)
-        battleLayout.setSpacing(1)
-
+        # --- Battle Properties (создаём ДО mapViewer) ---
         self.battleNotebook = QTabWidget()
-        self.battleNotebook.setFixedHeight(180)
+        self.battleNotebook.setFixedHeight(130)
 
         genWindow = QWidget(); genWndSizer = QVBoxLayout(genWindow); genWndSizer.setContentsMargins(1,1,1,1)
         mapWindow = QWidget(); mapWndSizer = QVBoxLayout(mapWindow); mapWndSizer.setContentsMargins(1,1,1,1)
         zoneWindow = QWidget(); zoneWndSizer = QVBoxLayout(zoneWindow); zoneWndSizer.setContentsMargins(1,1,1,1)
         terrainWindow = QWidget(); terrainWndSizer = QVBoxLayout(terrainWindow); terrainWndSizer.setContentsMargins(1,1,1,1)
 
-        # General tab
-        winSizer = QHBoxLayout()
-        winLeft = QVBoxLayout(); winLeft.setSpacing(1)
-        winLeft.addWidget(QLabel("Win Condition"))
-        self.winAllRadio = QRadioButton("All enemies"); self.winAllRadio.setChecked(True)
+        # General
+        genRow1 = QHBoxLayout()
+        self.winAllRadio = QRadioButton("All"); self.winAllRadio.setChecked(True)
         self.winBossRadio = QRadioButton("Boss")
         self.winCustomRadio = QRadioButton("Custom")
-        winLeft.addWidget(self.winAllRadio); winLeft.addWidget(self.winBossRadio); winLeft.addWidget(self.winCustomRadio)
-        winRight = QVBoxLayout(); winRight.setSpacing(1)
-        winRight.addWidget(QLabel("Graphics"))
-        self.defaultBattleGfxRadio = QRadioButton("Default"); self.defaultBattleGfxRadio.setChecked(True)
-        self.overrideBattleGfxRadio = QRadioButton("Override")
-        self.battleGfxList = QComboBox(); self.battleGfxList.setEnabled(False)
-        winRight.addWidget(self.defaultBattleGfxRadio); winRight.addWidget(self.overrideBattleGfxRadio); winRight.addWidget(self.battleGfxList)
-        winSizer.addLayout(winLeft); winSizer.addLayout(winRight)
-        genWndSizer.addLayout(winSizer)
+        genRow1.addWidget(QLabel("Win:"))
+        genRow1.addWidget(self.winAllRadio)
+        genRow1.addWidget(self.winBossRadio)
+        genRow1.addWidget(self.winCustomRadio)
+        genRow1.addStretch()
+        genWndSizer.addLayout(genRow1)
 
-        propSizer = QHBoxLayout()
-        self.propRepeatableCheck = QCheckBox("Repeatable")
-        self.propMandatoryCheck = QCheckBox("Mandatory")
-        self.propHalfEXPCheck = QCheckBox("Half EXP")
-        propSizer.addWidget(self.propRepeatableCheck); propSizer.addWidget(self.propMandatoryCheck); propSizer.addWidget(self.propHalfEXPCheck)
-        genWndSizer.addLayout(propSizer)
+        genRow2 = QHBoxLayout()
+        self.defaultBattleGfxRadio = QRadioButton("Def"); self.defaultBattleGfxRadio.setChecked(True)
+        self.overrideBattleGfxRadio = QRadioButton("Over")
+        self.battleGfxList = QComboBox(); self.battleGfxList.setFixedWidth(60)
+        genRow2.addWidget(QLabel("Gfx:"))
+        genRow2.addWidget(self.defaultBattleGfxRadio)
+        genRow2.addWidget(self.overrideBattleGfxRadio)
+        genRow2.addWidget(self.battleGfxList)
+        genRow2.addStretch()
+        genWndSizer.addLayout(genRow2)
 
-        cutSizer = QHBoxLayout()
-        cutSizer.addWidget(QLabel("Cutscenes:"))
+        genRow3 = QHBoxLayout()
+        self.propRepeatableCheck = QCheckBox("Repeat")
+        self.propMandatoryCheck = QCheckBox("Mand")
+        self.propHalfEXPCheck = QCheckBox("HalfXP")
+        genRow3.addWidget(self.propRepeatableCheck)
+        genRow3.addWidget(self.propMandatoryCheck)
+        genRow3.addWidget(self.propHalfEXPCheck)
+        genRow3.addStretch()
+        genWndSizer.addLayout(genRow3)
+
+        genRow4 = QHBoxLayout()
         self.cutsceneBeforeList = QComboBox()
         self.cutsceneAfterList = QComboBox()
-        cutSizer.addWidget(QLabel("Before")); cutSizer.addWidget(self.cutsceneBeforeList)
-        cutSizer.addWidget(QLabel("After")); cutSizer.addWidget(self.cutsceneAfterList)
-        genWndSizer.addLayout(cutSizer)
+        genRow4.addWidget(QLabel("Cut:"))
+        genRow4.addWidget(QLabel("Bef"))
+        genRow4.addWidget(self.cutsceneBeforeList)
+        genRow4.addWidget(QLabel("Aft"))
+        genRow4.addWidget(self.cutsceneAfterList)
+        genRow4.addStretch()
+        genWndSizer.addLayout(genRow4)
 
-        # Map tab
-        mapSizer = QHBoxLayout()
-        mapSizer.addWidget(QLabel("Map:"))
+        # Map
+        mapRow1 = QHBoxLayout()
         self.mapList = QComboBox(); self.mapList.addItems([s.name for s in self.rom.data["maps"]])
         self.mapList.setCurrentIndex(self.curBattle.map_index)
-        mapSizer.addWidget(self.mapList)
-        mapWndSizer.addLayout(mapSizer)
+        mapRow1.addWidget(QLabel("Map:"))
+        mapRow1.addWidget(self.mapList)
+        mapRow1.addStretch()
+        mapWndSizer.addLayout(mapRow1)
 
-        boundsSizer = QHBoxLayout()
-        boundsSizer.addWidget(QLabel("Cam X1/Y1"))
-        self.boundsXCtrl = QSpinBox(); self.boundsXCtrl.setMaximum(47); self.boundsXCtrl.setFixedWidth(40)
-        self.boundsYCtrl = QSpinBox(); self.boundsYCtrl.setMaximum(47); self.boundsYCtrl.setFixedWidth(40)
-        boundsSizer.addWidget(self.boundsXCtrl); boundsSizer.addWidget(self.boundsYCtrl)
-        boundsSizer.addWidget(QLabel("X2/Y2"))
-        self.boundsX2Ctrl = QSpinBox(); self.boundsX2Ctrl.setMaximum(47); self.boundsX2Ctrl.setFixedWidth(40)
-        self.boundsY2Ctrl = QSpinBox(); self.boundsY2Ctrl.setMaximum(47); self.boundsY2Ctrl.setFixedWidth(40)
-        boundsSizer.addWidget(self.boundsX2Ctrl); boundsSizer.addWidget(self.boundsY2Ctrl)
-        boundsSizer.addStretch()
-        mapWndSizer.addLayout(boundsSizer)
+        mapRow2 = QHBoxLayout()
+        self.boundsXCtrl = QSpinBox(); self.boundsXCtrl.setMaximum(47); self.boundsXCtrl.setFixedWidth(35)
+        self.boundsYCtrl = QSpinBox(); self.boundsYCtrl.setMaximum(47); self.boundsYCtrl.setFixedWidth(35)
+        self.boundsX2Ctrl = QSpinBox(); self.boundsX2Ctrl.setMaximum(47); self.boundsX2Ctrl.setFixedWidth(35)
+        self.boundsY2Ctrl = QSpinBox(); self.boundsY2Ctrl.setMaximum(47); self.boundsY2Ctrl.setFixedWidth(35)
+        mapRow2.addWidget(QLabel("X1/Y1"))
+        mapRow2.addWidget(self.boundsXCtrl)
+        mapRow2.addWidget(self.boundsYCtrl)
+        mapRow2.addWidget(QLabel("X2/Y2"))
+        mapRow2.addWidget(self.boundsX2Ctrl)
+        mapRow2.addWidget(self.boundsY2Ctrl)
+        mapRow2.addStretch()
+        mapWndSizer.addLayout(mapRow2)
 
-        # AI Zones tab
-        zoneLayout = QHBoxLayout()
-        regionBox = QVBoxLayout(); regionBox.setSpacing(1)
-        regionBox.addWidget(QLabel("Regions"))
-        self.regionList = QComboBox(); self.regionList.setFixedWidth(100)
-        regionBox.addWidget(self.regionList)
-        self.regionType1Radio = QRadioButton("Type 1"); self.regionType1Radio.setChecked(True)
-        self.regionType2Radio = QRadioButton("Type 2")
-        regionBox.addWidget(self.regionType1Radio); regionBox.addWidget(self.regionType2Radio)
+        # AI Zones
+        zoneRow1 = QHBoxLayout()
+        self.regionList = QComboBox(); self.regionList.setFixedWidth(80)
+        self.regionType1Radio = QRadioButton("T1"); self.regionType1Radio.setChecked(True)
+        self.regionType2Radio = QRadioButton("T2")
+        self.pointList = QComboBox(); self.pointList.setFixedWidth(60)
+        zoneRow1.addWidget(QLabel("Reg"))
+        zoneRow1.addWidget(self.regionList)
+        zoneRow1.addWidget(self.regionType1Radio)
+        zoneRow1.addWidget(self.regionType2Radio)
+        zoneRow1.addWidget(QLabel("Pt"))
+        zoneRow1.addWidget(self.pointList)
+        zoneRow1.addStretch()
+        zoneWndSizer.addLayout(zoneRow1)
 
-        pointBox = QVBoxLayout(); pointBox.setSpacing(1)
-        pointBox.addWidget(QLabel("Points"))
-        self.pointList = QComboBox(); self.pointList.setFixedWidth(80)
-        pointBox.addWidget(self.pointList)
+        zoneGrid = QGridLayout()
+        zoneGrid.setSpacing(1)
+        self.regionXCtrl = QSpinBox(); self.regionXCtrl.setMaximum(47); self.regionXCtrl.setFixedWidth(35)
+        self.regionYCtrl = QSpinBox(); self.regionYCtrl.setMaximum(47); self.regionYCtrl.setFixedWidth(35)
+        self.regionX2Ctrl = QSpinBox(); self.regionX2Ctrl.setMaximum(47); self.regionX2Ctrl.setFixedWidth(35)
+        self.regionY2Ctrl = QSpinBox(); self.regionY2Ctrl.setMaximum(47); self.regionY2Ctrl.setFixedWidth(35)
+        self.regionX3Ctrl = QSpinBox(); self.regionX3Ctrl.setMaximum(47); self.regionX3Ctrl.setFixedWidth(35)
+        self.regionY3Ctrl = QSpinBox(); self.regionY3Ctrl.setMaximum(47); self.regionY3Ctrl.setFixedWidth(35)
+        self.regionX4Ctrl = QSpinBox(); self.regionX4Ctrl.setMaximum(47); self.regionX4Ctrl.setFixedWidth(35)
+        self.regionY4Ctrl = QSpinBox(); self.regionY4Ctrl.setMaximum(47); self.regionY4Ctrl.setFixedWidth(35)
+        self.pointXCtrl = QSpinBox(); self.pointXCtrl.setMaximum(47); self.pointXCtrl.setFixedWidth(35)
+        self.pointYCtrl = QSpinBox(); self.pointYCtrl.setMaximum(47); self.pointYCtrl.setFixedWidth(35)
+        zoneGrid.addWidget(QLabel("X1"),0,0); zoneGrid.addWidget(self.regionXCtrl,0,1)
+        zoneGrid.addWidget(QLabel("Y1"),1,0); zoneGrid.addWidget(self.regionYCtrl,1,1)
+        zoneGrid.addWidget(QLabel("X2"),2,0); zoneGrid.addWidget(self.regionX2Ctrl,2,1)
+        zoneGrid.addWidget(QLabel("Y2"),3,0); zoneGrid.addWidget(self.regionY2Ctrl,3,1)
+        zoneGrid.addWidget(QLabel("X3"),0,2); zoneGrid.addWidget(self.regionX3Ctrl,0,3)
+        zoneGrid.addWidget(QLabel("Y3"),1,2); zoneGrid.addWidget(self.regionY3Ctrl,1,3)
+        zoneGrid.addWidget(QLabel("X4"),2,2); zoneGrid.addWidget(self.regionX4Ctrl,2,3)
+        zoneGrid.addWidget(QLabel("Y4"),3,2); zoneGrid.addWidget(self.regionY4Ctrl,3,3)
+        zoneGrid.addWidget(QLabel("PtX"),4,0); zoneGrid.addWidget(self.pointXCtrl,4,1)
+        zoneGrid.addWidget(QLabel("PtY"),4,2); zoneGrid.addWidget(self.pointYCtrl,4,3)
+        zoneWndSizer.addLayout(zoneGrid)
 
-        coordGrid = QGridLayout(); coordGrid.setSpacing(1)
-        self.regionXCtrl = QSpinBox(); self.regionXCtrl.setMaximum(47); self.regionXCtrl.setFixedWidth(45)
-        self.regionYCtrl = QSpinBox(); self.regionYCtrl.setMaximum(47); self.regionYCtrl.setFixedWidth(45)
-        self.regionX2Ctrl = QSpinBox(); self.regionX2Ctrl.setMaximum(47); self.regionX2Ctrl.setFixedWidth(45)
-        self.regionY2Ctrl = QSpinBox(); self.regionY2Ctrl.setMaximum(47); self.regionY2Ctrl.setFixedWidth(45)
-        self.regionX3Ctrl = QSpinBox(); self.regionX3Ctrl.setMaximum(47); self.regionX3Ctrl.setFixedWidth(45)
-        self.regionY3Ctrl = QSpinBox(); self.regionY3Ctrl.setMaximum(47); self.regionY3Ctrl.setFixedWidth(45)
-        self.regionX4Ctrl = QSpinBox(); self.regionX4Ctrl.setMaximum(47); self.regionX4Ctrl.setFixedWidth(45)
-        self.regionY4Ctrl = QSpinBox(); self.regionY4Ctrl.setMaximum(47); self.regionY4Ctrl.setFixedWidth(45)
-        self.pointXCtrl = QSpinBox(); self.pointXCtrl.setMaximum(47); self.pointXCtrl.setFixedWidth(45)
-        self.pointYCtrl = QSpinBox(); self.pointYCtrl.setMaximum(47); self.pointYCtrl.setFixedWidth(45)
-
-        coordGrid.addWidget(QLabel("X1"),0,0); coordGrid.addWidget(self.regionXCtrl,0,1)
-        coordGrid.addWidget(QLabel("Y1"),1,0); coordGrid.addWidget(self.regionYCtrl,1,1)
-        coordGrid.addWidget(QLabel("X2"),2,0); coordGrid.addWidget(self.regionX2Ctrl,2,1)
-        coordGrid.addWidget(QLabel("Y2"),3,0); coordGrid.addWidget(self.regionY2Ctrl,3,1)
-        coordGrid.addWidget(QLabel("X3"),2,2); coordGrid.addWidget(self.regionX3Ctrl,2,3)
-        coordGrid.addWidget(QLabel("Y3"),3,2); coordGrid.addWidget(self.regionY3Ctrl,3,3)
-        coordGrid.addWidget(QLabel("X4"),0,2); coordGrid.addWidget(self.regionX4Ctrl,0,3)
-        coordGrid.addWidget(QLabel("Y4"),1,2); coordGrid.addWidget(self.regionY4Ctrl,1,3)
-        coordGrid.addWidget(QLabel("Pt X"),4,0); coordGrid.addWidget(self.pointXCtrl,4,1)
-        coordGrid.addWidget(QLabel("Pt Y"),4,2); coordGrid.addWidget(self.pointYCtrl,4,3)
-
-        zoneLayout.addLayout(regionBox); zoneLayout.addLayout(pointBox); zoneLayout.addLayout(coordGrid)
-        zoneWndSizer.addLayout(zoneLayout)
-
-        # Terrain tab
-        terrainMain = QHBoxLayout()
-        leftTerrain = QVBoxLayout(); leftTerrain.setSpacing(2)
-        leftTerrain.addWidget(QLabel("^ Click"))
-        bmpWidget = QWidget()
-        bmpLayout = QHBoxLayout(bmpWidget); bmpLayout.setSpacing(0)
+        # Terrain
+        terRow1 = QHBoxLayout()
         self.terrainIconBtns = []
         terraintypes = ["Low Sky", "Plains", "Road", "Grass", "Forest", "Hill", "Desert", "High Sky", "Water", "Inaccessible"]
         for i, icon in enumerate(btn_icons):
             btn = QPushButton()
             btn.setIcon(icon)
-            btn.setFixedSize(28, 28)
+            btn.setFixedSize(20, 20)
             btn.setToolTip(terraintypes[i])
             btn.setProperty("context", i)
             btn.clicked.connect(self.OnSelectTerrainType)
-            bmpLayout.addWidget(btn)
+            terRow1.addWidget(btn)
             self.terrainIconBtns.append(btn)
-        leftTerrain.addWidget(bmpWidget)
+        terRow1.addStretch()
+        terrainWndSizer.addLayout(terRow1)
+
+        terRow2 = QHBoxLayout()
         self.curTerrainBmp = QLabel()
         self.curTerrainBmp.setPixmap(icons[0])
-        self.curTerrainBmp.setFixedSize(24, 24)
-        leftTerrain.addWidget(QLabel("Current:"))
-        leftTerrain.addWidget(self.curTerrainBmp)
+        self.curTerrainBmp.setFixedSize(20, 20)
+        terRow2.addWidget(QLabel("Cur:"))
+        terRow2.addWidget(self.curTerrainBmp)
+        terRow2.addStretch()
+        terrainWndSizer.addLayout(terRow2)
 
         diffColors = [QColor(255,255,255), QColor(192,255,192), QColor(128,255,128),
                       QColor(255,255,128), QColor(255,192,128), QColor(255,128,128),
@@ -386,7 +440,7 @@ class BattlePanel(rompanel.ROMPanel):
         self.terrainInfoGrid = QTableWidget(13, 9)
         self.terrainInfoGrid.horizontalHeader().setVisible(False)
         self.terrainInfoGrid.verticalHeader().setVisible(False)
-        self.terrainInfoGrid.setFixedSize(250, 280)
+        self.terrainInfoGrid.setFixedSize(200, 240)
         movetypes = ["Free", "Foot", "Horse", "Fast", "Tires", "Fly", "Float", "Water",
                      "Foot2", "Horse2", "Fast2", "Foot3", "Foot4"]
         for i in range(13):
@@ -403,28 +457,43 @@ class BattlePanel(rompanel.ROMPanel):
                 cell.setTextAlignment(Qt.AlignCenter)
                 self.terrainInfoGrid.setItem(y, x, cell)
 
-        terrainMain.addLayout(leftTerrain)
-        terrainMain.addWidget(self.terrainInfoGrid)
-        terrainWndSizer.addLayout(terrainMain)
+        terrainWndSizer.addWidget(self.terrainInfoGrid)
 
         self.battleNotebook.addTab(genWindow, "General")
         self.battleNotebook.addTab(mapWindow, "Map")
         self.battleNotebook.addTab(zoneWindow, "AI")
         self.battleNotebook.addTab(terrainWindow, "Terrain")
-        battleLayout.addWidget(self.battleNotebook)
 
-        # Map viewer
+        # Карта (создаём после battleNotebook)
         self.mapViewer = window.BattleMapViewer(self, None, self)
         self.mapViewer.init(None, None)
         self.mapViewer.mapViewPanel.drawFlags = False
-
         self.mapViewer.mapViewPanel.setMinimumSize(0, 0)
-        self.mapViewer.mapViewPanel.setMaximumSize(16777215, 16777215)
         self.mapViewer.mapViewPanel.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         if hasattr(self.mapViewer, 'mainPanel'):
             self.mapViewer.mainPanel.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
 
-        # Связываем View-элементы
+        centralLayout.addWidget(self.mapViewer, 1)
+
+        # Добавляем battleNotebook в правую панель
+        battleTab = QWidget()
+        battleTabLayout = QVBoxLayout(battleTab)
+        battleTabLayout.setContentsMargins(1, 1, 1, 1)
+        battleTabLayout.setSpacing(1)
+        battleTabLayout.addWidget(self.battleNotebook)
+        rightPanel.addTab(battleTab, "Battle")
+
+        # Сборка главного лейаута
+        mainLayout = QHBoxLayout()
+        mainLayout.setContentsMargins(1, 1, 1, 1)
+        mainLayout.setSpacing(1)
+        mainLayout.addWidget(leftPanel)
+        mainLayout.addWidget(centralPanel, 1)
+        mainLayout.addWidget(rightPanel)
+
+        self.sizer.addLayout(mainLayout, 0, 0, 1, 1)
+
+        # Связываем View и карту
         self.zoomSlider.valueChanged.connect(self.mapViewer.changeZoom)
         self.dispBlocksCheck.stateChanged.connect(
             lambda state: setattr(self.mapViewer.mapViewPanel, 'drawBlocks', state == Qt.Checked))
@@ -433,29 +502,7 @@ class BattlePanel(rompanel.ROMPanel):
         self.dispGridCheck.stateChanged.connect(self.mapViewer.OnToggleGridCheck)
         self.topCheck.stateChanged.connect(self.mapViewer.OnToggleTopCheck)
 
-        # --- Главный лейаут ---
-        self.sizer.addWidget(leftPanel,       0, 0, 2, 1)
-        self.sizer.addWidget(battleGroup,     2, 0, 1, 1)
-        self.sizer.addWidget(self.mapViewer,  0, 1, 3, 1)
-
-        leftPanel.setFixedWidth(220)
-        battleGroup.setMaximumHeight(190)
-
-        self.sizer.setColumnStretch(0, 0)
-        self.sizer.setColumnStretch(1, 1)
-
-        self.sizer.setRowStretch(0, 1)
-        self.sizer.setRowStretch(1, 1)
-        self.sizer.setRowStretch(2, 0)
-
-        self.sizer.setContentsMargins(1, 1, 1, 1)
-        self.sizer.setSpacing(1)
-
-        self.setMinimumWidth(1024)
-        self.setMinimumHeight(680)
-        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-
-        # Connections
+        # Подключения сигналов
         self.battleNotebook.currentChanged.connect(self.OnChangePage)
         self.addMonsterButton.clicked.connect(self.OnAddMonsterButton)
         self.addForceButton.clicked.connect(self.OnAddForceButton)
@@ -507,7 +554,7 @@ class BattlePanel(rompanel.ROMPanel):
 
         self.printed = False
 
-    # ========== Все методы класса (без изменений) ==========
+    # -------- Остальные методы класса (без изменений) --------
     def OnShow(self, event=None):
         pass
 
