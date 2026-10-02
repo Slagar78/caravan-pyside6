@@ -15,7 +15,7 @@ panelList = {
     "Fonts": fonts.FontPanel,
     "Item/Spell Icons": other_icons.OtherIconPanel,
     "Map Editor (ASM)": map_editor.MapEditorPanel,
-    "Map Definitions": maps.MapPanel,
+    # "Map Definitions": maps.MapPanel,
     "Menu Icons": menu_icons.MenuIconPanel,
     "Palettes": palettes.PalettePanel,
     "Portraits": portraits.PortraitPanel,
