@@ -5,27 +5,23 @@ from pathlib import Path
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QListWidget, QLabel,
     QSplitter, QScrollArea, QComboBox, QMdiSubWindow,
-    QPushButton, QProgressDialog, QMessageBox
+    QPushButton, QProgressDialog, QMessageBox,
+    QTabWidget, QTableWidget, QTableWidgetItem, QHeaderView
 )
 from PySide6.QtCore import Qt, QTimer, QStandardPaths
 from PySide6.QtGui import QPainter, QPixmap, QImage, QColor
 
 import rompanel
 import splitter
+import parsers
 
 
 def get_cache_dir(rom_path=None):
-    """Возвращает папку кеша.
-
-    Windows: %LOCALAPPDATA%/Caravan/maps/
-    Linux:   ~/.local/share/Caravan/maps/
-    macOS:   ~/Library/Application Support/Caravan/maps/
-    """
+    """Папка кеша: %LOCALAPPDATA%/Caravan/maps/ (кроссплатформенно)."""
     base = QStandardPaths.writableLocation(
         QStandardPaths.StandardLocation.AppLocalDataLocation
     )
     if not base:
-        # Fallback, если Qt не смог определить
         base = str(Path.home() / ".caravan")
     return Path(base) / "maps"
 
@@ -106,6 +102,50 @@ class SimpleMapView(QWidget):
         painter.end()
 
 
+class AreasTable(QTableWidget):
+    """Таблица Areas — порт MapAreaTableModel (read-only)."""
+
+    COLUMNS = [
+        "Index", "L1 X", "L1 Y", "L1 X'", "L1 Y'",
+        "L2 FX", "L2 FY", "L2 BX", "L2 BY",
+        "L1 PX", "L1 PY", "L2 PX", "L2 PY",
+        "L1 SX", "L1 SY", "L2 SX", "L2 SY",
+        "L1 Type", "Music"
+    ]
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setColumnCount(len(self.COLUMNS))
+        self.setHorizontalHeaderLabels(self.COLUMNS)
+        self.setEditTriggers(QTableWidget.NoEditTriggers)
+        self.setSelectionBehavior(QTableWidget.SelectRows)
+        self.verticalHeader().setVisible(False)
+        self.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
+
+    def set_areas(self, areas: list):
+        """Заполняет таблицу списком MapArea."""
+        self.setRowCount(len(areas))
+        for row, a in enumerate(areas):
+            values = [
+                row,
+                a.layer1StartX, a.layer1StartY,
+                a.layer1EndX, a.layer1EndY,
+                a.foregroundLayer2StartX, a.foregroundLayer2StartY,
+                a.backgroundLayer2StartX, a.backgroundLayer2StartY,
+                a.layer1ParallaxX, a.layer1ParallaxY,
+                a.layer2ParallaxX, a.layer2ParallaxY,
+                a.layer1AutoscrollX, a.layer1AutoscrollY,
+                a.layer2AutoscrollX, a.layer2AutoscrollY,
+                a.layerType,
+                a.defaultMusic,
+            ]
+            for col, val in enumerate(values):
+                item = QTableWidgetItem(str(val))
+                if col != 18:  # все числовые, кроме Music
+                    item.setTextAlignment(Qt.AlignCenter)
+                self.setItem(row, col, item)
+
+
 class MapEditorPanel(rompanel.ROMPanel):
 
     frameTitle = "Map Editor (ASM)"
@@ -157,12 +197,10 @@ class MapEditorPanel(rompanel.ROMPanel):
 
         top_bar.addSpacing(20)
 
-        # Кнопка Split to ASM
         self.split_btn = QPushButton("Split to ASM")
         self.split_btn.clicked.connect(self._on_split_clicked)
         top_bar.addWidget(self.split_btn)
 
-        # Кнопка "Открыть папку кеша"
         self.open_folder_btn = QPushButton("Open ASM folder")
         self.open_folder_btn.clicked.connect(self._on_open_folder)
         top_bar.addWidget(self.open_folder_btn)
@@ -174,14 +212,36 @@ class MapEditorPanel(rompanel.ROMPanel):
 
         right_layout.addLayout(top_bar)
 
-        # --- Скролл с картой ---
+        # --- Вертикальный сплиттер: карта сверху, вкладки снизу ---
+        v_splitter = QSplitter(Qt.Vertical)
+
+        # Верх — скролл с картой
         self.scroll_area = QScrollArea()
         self.scroll_area.setWidgetResizable(False)
-        right_layout.addWidget(self.scroll_area)
+        v_splitter.addWidget(self.scroll_area)
+
+        # Низ — вкладки
+        self.tabs = QTabWidget()
+        self.tabs.setMinimumHeight(180)
+
+        # Вкладка Areas
+        self.areas_table = AreasTable()
+        self.tabs.addTab(self.areas_table, "Areas")
+
+        # Заглушки для будущих вкладок
+        for name in ["Flag Copies", "Step Copies", "Roof Copies", "Warps", "Items", "Animations"]:
+            placeholder = QLabel(f"{name} — TODO")
+            placeholder.setAlignment(Qt.AlignCenter)
+            self.tabs.addTab(placeholder, name)
+
+        v_splitter.addWidget(self.tabs)
+        v_splitter.setSizes([600, 200])
+
+        right_layout.addWidget(v_splitter)
 
         self.current_view = None
 
-        # Сплиттер
+        # Главный сплиттер (карты слева | контент справа)
         splitter_widget = QSplitter(Qt.Horizontal)
         splitter_widget.addWidget(left)
         splitter_widget.addWidget(right)
@@ -206,7 +266,6 @@ class MapEditorPanel(rompanel.ROMPanel):
     # ============================================================
 
     def _maybe_split(self):
-        """Запускает split, если ещё не делался."""
         if self.cache_dir is None:
             return
         marker = self.cache_dir / ".split_done"
@@ -217,14 +276,12 @@ class MapEditorPanel(rompanel.ROMPanel):
         self._do_split()
 
     def _on_split_clicked(self):
-        """Кнопка Split to ASM."""
         if self.cache_dir is None:
             QMessageBox.warning(self, "Split", "Не могу определить папку кеша.")
             return
         self._do_split(force=True)
 
     def _do_split(self, force=False):
-        """Запускает split с прогресс-диалогом."""
         if self.cache_dir is None:
             return
 
@@ -234,7 +291,6 @@ class MapEditorPanel(rompanel.ROMPanel):
 
         self.cache_dir.mkdir(parents=True, exist_ok=True)
 
-        # Прогресс-диалог
         progress = QProgressDialog(
             "Splitting maps to ASM...", "Cancel", 0,
             len(self.rom.data["maps"]), self
@@ -273,11 +329,10 @@ class MapEditorPanel(rompanel.ROMPanel):
             progress.close()
 
     def _on_open_folder(self):
-        """Открывает папку кеша в системном проводнике."""
         if self.cache_dir is None:
             return
         if not self.cache_dir.exists():
-            QMessageBox.warning(self, "Open folder", "Папка ещё не создана. Нажми Split to ASM.")
+            QMessageBox.warning(self, "Open folder", "Папка ещё не создана.")
             return
 
         import subprocess
@@ -333,3 +388,26 @@ class MapEditorPanel(rompanel.ROMPanel):
         )
         self.current_view = view
         self.scroll_area.setWidget(view)
+
+        # --- Парсим ASM-файлы и заполняем таблицы ---
+        self._refresh_tables(idx)
+
+    def _refresh_tables(self, idx):
+        """Читает ASM-файлы карты и заполняет таблицы."""
+        if self.cache_dir is None:
+            return
+        map_dir = self.cache_dir / f"map{idx:02d}"
+        if not map_dir.exists():
+            print(f"[tables] Папка не найдена: {map_dir}")
+            return
+
+        # --- Areas ---
+        try:
+            areas_path = map_dir / "2-areas.asm"
+            areas = parsers.parse_areas_asm(areas_path)
+            self.areas_table.set_areas(areas)
+            print(f"[tables] Map {idx}: распарсено {len(areas)} areas")
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            print(f"[tables] Ошибка парсинга areas: {e}")
