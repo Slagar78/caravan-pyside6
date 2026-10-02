@@ -177,8 +177,9 @@ def build_view_panel() -> QWidget:
 # ============================================================
 
 class ClickLabel(QLabel):
-    """QLabel с сигналом при клике ЛКМ."""
+    """QLabel с сигналами ЛКМ и ПКМ."""
     clicked = Signal(int)
+    right_clicked = Signal(int)
 
     def __init__(self, index: int, parent=None):
         super().__init__(parent)
@@ -188,6 +189,8 @@ class ClickLabel(QLabel):
     def mousePressEvent(self, event):
         if event.button() == Qt.LeftButton:
             self.clicked.emit(self.index)
+        elif event.button() == Qt.RightButton:
+            self.right_clicked.emit(self.index)
         super().mousePressEvent(event)
 
 
@@ -220,29 +223,66 @@ class BlocksetPanel(QWidget):
         self.grid.setContentsMargins(4, 4, 4, 4)
         self.scroll.setWidget(self.inner)
 
-        # ===== Превью выбранного блока (при наведении) =====
-        preview_group = QGroupBox("Block Preview")
-        preview_layout = QVBoxLayout(preview_group)
+        # ===== Selected Blocks: Left + Right рядом =====
+        preview_group = QGroupBox("Selected Blocks")
+        preview_layout = QHBoxLayout(preview_group)
         preview_layout.setContentsMargins(4, 4, 4, 4)
+        preview_layout.setSpacing(12)
 
-        self.preview_label = QLabel("click a block")
-        self.preview_label.setFixedSize(96, 96)
-        self.preview_label.setAlignment(Qt.AlignCenter)
-        self.preview_label.setStyleSheet("""
+        # --- Left click ---
+        left_col = QVBoxLayout()
+        left_col.setSpacing(2)
+        left_lbl = QLabel("Left click")
+        left_lbl.setAlignment(Qt.AlignCenter)
+        left_lbl.setStyleSheet("color: #ccc; font-size: 9pt;")
+        left_col.addWidget(left_lbl)
+
+        self.left_preview = QLabel("—")
+        self.left_preview.setFixedSize(64, 64)
+        self.left_preview.setAlignment(Qt.AlignCenter)
+        self.left_preview.setStyleSheet("""
             QLabel {
-                border: 1px solid #666;
-                border-radius: 8px;
+                border: 2px solid #ffd700;
+                border-radius: 6px;
                 background: #1e1e1e;
                 color: #888;
-                padding: 4px;
             }
         """)
-        preview_layout.addWidget(self.preview_label, 0, Qt.AlignCenter)
+        left_col.addWidget(self.left_preview, 0, Qt.AlignCenter)
 
-        self.preview_index_label = QLabel("")
-        self.preview_index_label.setAlignment(Qt.AlignCenter)
-        self.preview_index_label.setStyleSheet("color: #888; font-size: 9pt;")
-        preview_layout.addWidget(self.preview_index_label)
+        self.left_index_label = QLabel("")
+        self.left_index_label.setAlignment(Qt.AlignCenter)
+        self.left_index_label.setStyleSheet("color: #888; font-size: 8pt;")
+        left_col.addWidget(self.left_index_label)
+
+        # --- Right click ---
+        right_col = QVBoxLayout()
+        right_col.setSpacing(2)
+        right_lbl = QLabel("Right click")
+        right_lbl.setAlignment(Qt.AlignCenter)
+        right_lbl.setStyleSheet("color: #ccc; font-size: 9pt;")
+        right_col.addWidget(right_lbl)
+
+        self.right_preview = QLabel("—")
+        self.right_preview.setFixedSize(64, 64)
+        self.right_preview.setAlignment(Qt.AlignCenter)
+        self.right_preview.setStyleSheet("""
+            QLabel {
+                border: 2px solid #ff00ff;
+                border-radius: 6px;
+                background: #1e1e1e;
+                color: #888;
+            }
+        """)
+        right_col.addWidget(self.right_preview, 0, Qt.AlignCenter)
+
+        self.right_index_label = QLabel("")
+        self.right_index_label.setAlignment(Qt.AlignCenter)
+        self.right_index_label.setStyleSheet("color: #888; font-size: 8pt;")
+        right_col.addWidget(self.right_index_label)
+
+        preview_layout.addLayout(left_col)
+        preview_layout.addLayout(right_col)
 
         # Кнопки (пока заглушки)
         btn_row = QHBoxLayout()
@@ -298,10 +338,13 @@ class BlocksetPanel(QWidget):
         self.blocks = list(getattr(py_map, "blocks", []) or [])
         self.block_bmps = []
 
-        # Сбрасываем превью
-        self.preview_label.setPixmap(QPixmap())
-        self.preview_label.setText("click a block")
-        self.preview_index_label.setText("")
+        # Сбрасываем оба превью
+        self.left_preview.setPixmap(QPixmap())
+        self.left_preview.setText("—")
+        self.left_index_label.setText("")
+        self.right_preview.setPixmap(QPixmap())
+        self.right_preview.setText("—")
+        self.right_index_label.setText("")
 
         if not self.blocks:
             self._rebuild_grid()
@@ -377,20 +420,31 @@ class BlocksetPanel(QWidget):
             cell.setStyleSheet(CELL_STYLE)
             cell.setToolTip(f"Block {i}")
             cell.clicked.connect(self._on_block_clicked)
+            cell.right_clicked.connect(self._on_block_right_clicked)
             self.grid.addWidget(cell, row, col + 1)
 
         # Растяжка по правому краю
         self.grid.setColumnStretch(cols + 1, 1)
 
     def _on_block_clicked(self, index: int):
-        """Показывает увеличенный блок в превью при клике ЛКМ."""
+        """ЛКМ → левый квадрат."""
         if not (0 <= index < len(self.block_bmps)):
             return
         big = self.block_bmps[index].scaled(
-            80, 80, Qt.KeepAspectRatio, Qt.FastTransformation
+            56, 56, Qt.KeepAspectRatio, Qt.FastTransformation
         )
-        self.preview_label.setPixmap(big)
-        self.preview_index_label.setText(f"Block {index}")
+        self.left_preview.setPixmap(big)
+        self.left_index_label.setText(f"Block {index}")
+
+    def _on_block_right_clicked(self, index: int):
+        """ПКМ → правый квадрат."""
+        if not (0 <= index < len(self.block_bmps)):
+            return
+        big = self.block_bmps[index].scaled(
+            56, 56, Qt.KeepAspectRatio, Qt.FastTransformation
+        )
+        self.right_preview.setPixmap(big)
+        self.right_index_label.setText(f"Block {index}")
 
 # ============================================================
 #  Главная панель
