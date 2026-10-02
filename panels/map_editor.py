@@ -207,6 +207,9 @@ class BlocksetPanel(QWidget):
         self.blocks = []
         self.block_bmps = []
         self.tiles_per_row = 10
+        self.cell_labels = {}          # index → ClickLabel
+        self.left_selected_index = -1   # текущий выбранный ЛКМ
+        self.right_selected_index = -1  # текущий выбранный ПКМ
 
         # Заголовок
         header = QLabel("Blockset")
@@ -382,6 +385,7 @@ class BlocksetPanel(QWidget):
                 item.widget().deleteLater()
 
         cols = self.tiles_per_row
+        self.cell_labels = {}    # сбрасываем
         CELL_STYLE = "border: 1px solid #555;"
         LABEL_STYLE = "color: #ccc; font-size: 8pt; " + CELL_STYLE
 
@@ -417,34 +421,77 @@ class BlocksetPanel(QWidget):
             cell = ClickLabel(i)
             cell.setPixmap(bmp)
             cell.setFixedSize(self.BLOCK_SIZE, self.BLOCK_SIZE)
-            cell.setStyleSheet(CELL_STYLE)
             cell.setToolTip(f"Block {i}")
             cell.clicked.connect(self._on_block_clicked)
             cell.right_clicked.connect(self._on_block_right_clicked)
+            self.cell_labels[i] = cell
             self.grid.addWidget(cell, row, col + 1)
 
         # Растяжка по правому краю
         self.grid.setColumnStretch(cols + 1, 1)
+        # Восстанавливаем подсветку выбранных
+        self._refresh_cell_highlight()
 
     def _on_block_clicked(self, index: int):
-        """ЛКМ → левый квадрат."""
+        """ЛКМ → левый квадрат + жёлтая рамка в сетке."""
         if not (0 <= index < len(self.block_bmps)):
             return
+        self.left_selected_index = index
+
         big = self.block_bmps[index].scaled(
             56, 56, Qt.KeepAspectRatio, Qt.FastTransformation
         )
         self.left_preview.setPixmap(big)
         self.left_index_label.setText(f"Block {index}")
 
+        self._refresh_cell_highlight()
+
     def _on_block_right_clicked(self, index: int):
-        """ПКМ → правый квадрат."""
+        """ПКМ → правый квадрат + розовая рамка в сетке."""
         if not (0 <= index < len(self.block_bmps)):
             return
+        self.right_selected_index = index
+
         big = self.block_bmps[index].scaled(
             56, 56, Qt.KeepAspectRatio, Qt.FastTransformation
         )
         self.right_preview.setPixmap(big)
         self.right_index_label.setText(f"Block {index}")
+
+        self._refresh_cell_highlight()
+
+    def _refresh_cell_highlight(self):
+        """Обновляет рамки у выбранных блоков в сетке.
+
+        ЛКМ → жёлтая рамка
+        ПКМ → розовая рамка
+        Если индекс один и тот же — рисуем обе (фиолетовая)
+        """
+        for idx, cell in self.cell_labels.items():
+            is_left = (idx == self.left_selected_index)
+            is_right = (idx == self.right_selected_index)
+
+            if is_left and is_right:
+                # Оба выбраны — толстая фиолетовая
+                cell.setStyleSheet(
+                    "border: 2px solid #c060ff;"
+                    "background: #3a2a4a;"
+                )
+            elif is_left:
+                # Только ЛКМ — жёлтая
+                cell.setStyleSheet(
+                    "border: 2px solid #ffd700;"
+                    "background: #3a3a10;"
+                )
+            elif is_right:
+                # Только ПКМ — розовая
+                cell.setStyleSheet(
+                    "border: 2px solid #ff00ff;"
+                    "background: #3a103a;"
+                )
+            else:
+                # Обычная
+                cell.setStyleSheet("border: 1px solid #555;")
 
 # ============================================================
 #  Главная панель
