@@ -1,12 +1,33 @@
-"""Минимальный редактор карт (ASM) — только отображение."""
+"""Редактор карт (ASM) — просмотр + split в ASM-файлы."""
+import os
+from pathlib import Path
+
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QListWidget, QLabel,
-    QSplitter, QScrollArea, QComboBox, QMdiSubWindow
+    QSplitter, QScrollArea, QComboBox, QMdiSubWindow,
+    QPushButton, QProgressDialog, QMessageBox
 )
-from PySide6.QtCore import Qt, QTimer
+from PySide6.QtCore import Qt, QTimer, QStandardPaths
 from PySide6.QtGui import QPainter, QPixmap, QImage, QColor
 
 import rompanel
+import splitter
+
+
+def get_cache_dir(rom_path=None):
+    """Возвращает папку кеша.
+
+    Windows: %LOCALAPPDATA%/Caravan/maps/
+    Linux:   ~/.local/share/Caravan/maps/
+    macOS:   ~/Library/Application Support/Caravan/maps/
+    """
+    base = QStandardPaths.writableLocation(
+        QStandardPaths.StandardLocation.AppLocalDataLocation
+    )
+    if not base:
+        # Fallback, если Qt не смог определить
+        base = str(Path.home() / ".caravan")
+    return Path(base) / "maps"
 
 
 class SimpleMapView(QWidget):
@@ -24,7 +45,6 @@ class SimpleMapView(QWidget):
         self._update_size()
 
     def _update_size(self):
-        """Обновляет размер виджета под текущий масштаб."""
         size = int(64 * self.BASE_BLOCK_SIZE * self.scale)
         self.setFixedSize(size, size)
 
@@ -34,7 +54,6 @@ class SimpleMapView(QWidget):
         self.update()
 
     def _rebuild(self):
-        """Создаёт QPixmap для каждого блока (в 1x)."""
         self.block_bmps = []
         if not hasattr(self.py_map, "blocks") or not self.py_map.blocks:
             return
@@ -95,9 +114,9 @@ class MapEditorPanel(rompanel.ROMPanel):
     def showEvent(self, event):
         super().showEvent(event)
         QTimer.singleShot(100, self._maximize_once)
+        QTimer.singleShot(200, self._maybe_split)
 
     def _maximize_once(self):
-        """Разворачивает MDI-подокно один раз при открытии."""
         if getattr(self, "_maximized_done", False):
             return
         self._maximized_done = True
@@ -126,15 +145,27 @@ class MapEditorPanel(rompanel.ROMPanel):
         right = QWidget()
         right_layout = QVBoxLayout(right)
 
-        # --- Верхняя панель с масштабом ---
+        # --- Верхняя панель ---
         top_bar = QHBoxLayout()
         top_bar.addWidget(QLabel("Scale:"))
 
         self.scale_combo = QComboBox()
         self.scale_combo.addItems(["1/4x", "1/2x", "1x", "2x", "4x"])
-        self.scale_combo.setCurrentIndex(2)  # 1x по умолчанию
+        self.scale_combo.setCurrentIndex(2)
         self.scale_combo.currentIndexChanged.connect(self._on_scale_changed)
         top_bar.addWidget(self.scale_combo)
+
+        top_bar.addSpacing(20)
+
+        # Кнопка Split to ASM
+        self.split_btn = QPushButton("Split to ASM")
+        self.split_btn.clicked.connect(self._on_split_clicked)
+        top_bar.addWidget(self.split_btn)
+
+        # Кнопка "Открыть папку кеша"
+        self.open_folder_btn = QPushButton("Open ASM folder")
+        self.open_folder_btn.clicked.connect(self._on_open_folder)
+        top_bar.addWidget(self.open_folder_btn)
 
         top_bar.addStretch()
 
@@ -151,19 +182,119 @@ class MapEditorPanel(rompanel.ROMPanel):
         self.current_view = None
 
         # Сплиттер
-        splitter = QSplitter(Qt.Horizontal)
-        splitter.addWidget(left)
-        splitter.addWidget(right)
-        splitter.setStretchFactor(0, 0)
-        splitter.setStretchFactor(1, 1)
-        splitter.setSizes([200, 800])
+        splitter_widget = QSplitter(Qt.Horizontal)
+        splitter_widget.addWidget(left)
+        splitter_widget.addWidget(right)
+        splitter_widget.setStretchFactor(0, 0)
+        splitter_widget.setStretchFactor(1, 1)
+        splitter_widget.setSizes([200, 800])
 
-        self.sizer.addWidget(splitter, 0, 0)
+        self.sizer.addWidget(splitter_widget, 0, 0)
+
+        # Кеш-директория
+        self.cache_dir = None
+        try:
+            self.cache_dir = get_cache_dir(self.rom.file.name)
+            print(f"[cache] Путь кеша: {self.cache_dir}")
+        except Exception as e:
+            print(f"[cache] Не могу получить путь кеша: {e}")
 
         QTimer.singleShot(100, lambda: self.map_list.setCurrentRow(0))
 
+    # ============================================================
+    #  Split
+    # ============================================================
+
+    def _maybe_split(self):
+        """Запускает split, если ещё не делался."""
+        if self.cache_dir is None:
+            return
+        marker = self.cache_dir / ".split_done"
+        if marker.exists():
+            print(f"[split] Кеш уже есть: {self.cache_dir}")
+            return
+        print(f"[split] Запускаю split в {self.cache_dir}")
+        self._do_split()
+
+    def _on_split_clicked(self):
+        """Кнопка Split to ASM."""
+        if self.cache_dir is None:
+            QMessageBox.warning(self, "Split", "Не могу определить папку кеша.")
+            return
+        self._do_split(force=True)
+
+    def _do_split(self, force=False):
+        """Запускает split с прогресс-диалогом."""
+        if self.cache_dir is None:
+            return
+
+        if force and self.cache_dir.exists():
+            import shutil
+            shutil.rmtree(self.cache_dir, ignore_errors=True)
+
+        self.cache_dir.mkdir(parents=True, exist_ok=True)
+
+        # Прогресс-диалог
+        progress = QProgressDialog(
+            "Splitting maps to ASM...", "Cancel", 0,
+            len(self.rom.data["maps"]), self
+        )
+        progress.setWindowTitle("Split to ASM")
+        progress.setWindowModality(Qt.WindowModal)
+        progress.setMinimumDuration(0)
+        progress.setValue(0)
+
+        def callback(current, total, map_id):
+            progress.setValue(current)
+            progress.setLabelText(
+                f"Splitting map {map_id:02d} ({current}/{total})..."
+            )
+            from PySide6.QtWidgets import QApplication
+            QApplication.processEvents()
+
+        try:
+            splitter.split_all_maps(
+                self.rom, self.cache_dir,
+                progress_callback=callback
+            )
+            (self.cache_dir / ".split_done").write_text("ok")
+            progress.setValue(len(self.rom.data["maps"]))
+
+            if force:
+                QMessageBox.information(
+                    self, "Split to ASM",
+                    f"Готово!\n\nФайлы в:\n{self.cache_dir}"
+                )
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            QMessageBox.critical(self, "Split Error", str(e))
+        finally:
+            progress.close()
+
+    def _on_open_folder(self):
+        """Открывает папку кеша в системном проводнике."""
+        if self.cache_dir is None:
+            return
+        if not self.cache_dir.exists():
+            QMessageBox.warning(self, "Open folder", "Папка ещё не создана. Нажми Split to ASM.")
+            return
+
+        import subprocess
+        import sys
+        path = str(self.cache_dir)
+        if sys.platform.startswith("win"):
+            os.startfile(path)
+        elif sys.platform == "darwin":
+            subprocess.Popen(["open", path])
+        else:
+            subprocess.Popen(["xdg-open", path])
+
+    # ============================================================
+    #  Просмотр
+    # ============================================================
+
     def _current_scale(self):
-        """Преобразует текст комбобокса в числовой множитель."""
         text = self.scale_combo.currentText()
         if text == "1/4x": return 0.25
         if text == "1/2x": return 0.5

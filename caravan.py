@@ -16,6 +16,7 @@ from PySide6.QtGui import QAction, QIcon, QFont
 sys.path.append("lib")
 
 app = QApplication(sys.argv)
+app.setApplicationName("Caravan")
 app.setStyle(QStyleFactory.create('Fusion'))
 icon = QIcon("caravan.ico")
 
