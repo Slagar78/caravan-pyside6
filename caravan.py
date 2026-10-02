@@ -18,6 +18,59 @@ sys.path.append("lib")
 app = QApplication(sys.argv)
 app.setApplicationName("Caravan")
 app.setStyle(QStyleFactory.create('Fusion'))
+
+app.setStyleSheet("""
+    /* ===== Вертикальный ===== */
+    QScrollBar:vertical {
+        background: transparent;
+        width: 10px;
+        margin: 0;
+        border: none;
+    }
+    QScrollBar::handle:vertical {
+        background: #3b82f6;
+        min-height: 30px;
+        border-radius: 5px;
+        margin: 2px;
+    }
+    QScrollBar::handle:vertical:hover {
+        background: #60a5fa;
+    }
+    QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+        height: 0;
+        background: none;
+        border: none;
+    }
+    QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {
+        background: none;
+    }
+
+    /* ===== Горизонтальный ===== */
+    QScrollBar:horizontal {
+        background: transparent;
+        height: 10px;
+        margin: 0;
+        border: none;
+    }
+    QScrollBar::handle:horizontal {
+        background: #3b82f6;
+        min-width: 30px;
+        border-radius: 5px;
+        margin: 2px;
+    }
+    QScrollBar::handle:horizontal:hover {
+        background: #60a5fa;
+    }
+    QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {
+        width: 0;
+        background: none;
+        border: none;
+    }
+    QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal {
+        background: none;
+    }
+""")
+
 icon = QIcon("caravan.ico")
 
 import sys, os
