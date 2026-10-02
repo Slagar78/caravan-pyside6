@@ -3,6 +3,7 @@ sys.path.append("panels")
 
 import default
 import backgrounds, battles, battle_floors, battle_sprites, spell_anims, dialogue, fonts, other_icons, maps, menu_icons, palettes, portraits, romviewer, sprites, tiles, weapon_sprites
+import map_editor
 
 panelList = {
     "Battles": battles.BattlePanel,
@@ -13,6 +14,7 @@ panelList = {
     "Dialogue": dialogue.DialoguePanel,
     "Fonts": fonts.FontPanel,
     "Item/Spell Icons": other_icons.OtherIconPanel,
+    "Map Editor (ASM)": map_editor.MapEditorPanel,
     "Map Definitions": maps.MapPanel,
     "Menu Icons": menu_icons.MenuIconPanel,
     "Palettes": palettes.PalettePanel,
