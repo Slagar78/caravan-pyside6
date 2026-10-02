@@ -24,3 +24,4 @@ pyinstaller --onefile --windowed --clean --noconfirm ^
     --hidden-import splitter ^
     --hidden-import parsers ^
     caravan.py
+	
