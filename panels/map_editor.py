@@ -10,7 +10,7 @@ from PySide6.QtWidgets import (
     QGroupBox, QCheckBox, QSizePolicy,
     QGridLayout, QSpinBox
 )
-from PySide6.QtCore import Qt, QTimer, QStandardPaths
+from PySide6.QtCore import Qt, QTimer, QStandardPaths, Signal
 from PySide6.QtGui import QPainter, QPixmap, QImage, QColor
 
 import rompanel
@@ -172,16 +172,29 @@ def build_view_panel() -> QWidget:
 
     return w
 
-
 # ============================================================
 #  Панель Blockset (слева от карты)
 # ============================================================
+
+class ClickLabel(QLabel):
+    """QLabel с сигналом при клике ЛКМ."""
+    clicked = Signal(int)
+
+    def __init__(self, index: int, parent=None):
+        super().__init__(parent)
+        self.index = index
+        self.setCursor(Qt.PointingHandCursor)
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            self.clicked.emit(self.index)
+        super().mousePressEvent(event)
+
 
 class BlocksetPanel(QWidget):
     """Показывает все блоки карты в виде сетки (read-only).
 
     Порт Java-панели MapBlocksetLayoutPanel.
-    Пока без выбора блока — только отображение.
     """
 
     BLOCK_SIZE = 24      # размер блока в пикселях (1x)
@@ -199,12 +212,37 @@ class BlocksetPanel(QWidget):
         # Скролл с сеткой блоков
         self.scroll = QScrollArea()
         self.scroll.setWidgetResizable(True)
+        self.scroll.setMaximumHeight(420)
         self.inner = QWidget()
         self.inner.setStyleSheet("background: #2a2a2a;")
         self.grid = QGridLayout(self.inner)
         self.grid.setSpacing(0)
         self.grid.setContentsMargins(4, 4, 4, 4)
         self.scroll.setWidget(self.inner)
+
+        # ===== Превью выбранного блока (при наведении) =====
+        preview_group = QGroupBox("Block Preview")
+        preview_layout = QVBoxLayout(preview_group)
+        preview_layout.setContentsMargins(4, 4, 4, 4)
+
+        self.preview_label = QLabel("click a block")
+        self.preview_label.setFixedSize(96, 96)
+        self.preview_label.setAlignment(Qt.AlignCenter)
+        self.preview_label.setStyleSheet("""
+            QLabel {
+                border: 1px solid #666;
+                border-radius: 8px;
+                background: #1e1e1e;
+                color: #888;
+                padding: 4px;
+            }
+        """)
+        preview_layout.addWidget(self.preview_label, 0, Qt.AlignCenter)
+
+        self.preview_index_label = QLabel("")
+        self.preview_index_label.setAlignment(Qt.AlignCenter)
+        self.preview_index_label.setStyleSheet("color: #888; font-size: 9pt;")
+        preview_layout.addWidget(self.preview_index_label)
 
         # Кнопки (пока заглушки)
         btn_row = QHBoxLayout()
@@ -251,6 +289,7 @@ class BlocksetPanel(QWidget):
         layout.setSpacing(4)
         layout.addWidget(header)
         layout.addWidget(self.scroll, 1)
+        layout.addWidget(preview_group)
         layout.addLayout(btn_row)
         layout.addWidget(opts)
 
@@ -258,6 +297,11 @@ class BlocksetPanel(QWidget):
         """Загружает блоки карты и строит сетку миниатюр."""
         self.blocks = list(getattr(py_map, "blocks", []) or [])
         self.block_bmps = []
+
+        # Сбрасываем превью
+        self.preview_label.setPixmap(QPixmap())
+        self.preview_label.setText("click a block")
+        self.preview_index_label.setText("")
 
         if not self.blocks:
             self._rebuild_grid()
@@ -326,16 +370,27 @@ class BlocksetPanel(QWidget):
                 lbl.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
                 self.grid.addWidget(lbl, row, 0)
 
-            # Миниатюра блока
-            cell = QLabel()
+            # Миниатюра блока (с сигналом клика)
+            cell = ClickLabel(i)
             cell.setPixmap(bmp)
             cell.setFixedSize(self.BLOCK_SIZE, self.BLOCK_SIZE)
             cell.setStyleSheet(CELL_STYLE)
             cell.setToolTip(f"Block {i}")
+            cell.clicked.connect(self._on_block_clicked)
             self.grid.addWidget(cell, row, col + 1)
 
         # Растяжка по правому краю
         self.grid.setColumnStretch(cols + 1, 1)
+
+    def _on_block_clicked(self, index: int):
+        """Показывает увеличенный блок в превью при клике ЛКМ."""
+        if not (0 <= index < len(self.block_bmps)):
+            return
+        big = self.block_bmps[index].scaled(
+            80, 80, Qt.KeepAspectRatio, Qt.FastTransformation
+        )
+        self.preview_label.setPixmap(big)
+        self.preview_index_label.setText(f"Block {index}")
 
 # ============================================================
 #  Главная панель
