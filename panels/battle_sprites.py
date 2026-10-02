@@ -74,6 +74,12 @@ class BattleSpritePanel(rompanel.ROMPanel):
         sbs3_layout.addWidget(self.frameList)
         sbs3_layout.addWidget(self.paletteList)
 
+        # Кнопка добавления палитры
+        self.addPaletteButton = QPushButton("Add Palette")
+        self.addPaletteButton.setFixedWidth(120)
+        self.addPaletteButton.clicked.connect(self.OnAddPalette)
+        sbs3_layout.addWidget(self.addPaletteButton, alignment=Qt.AlignCenter)
+
         # ==================== EDIT ====================
         sbs4 = QGroupBox("Edit")
         sbs4_layout = QHBoxLayout(sbs4)
@@ -410,6 +416,47 @@ class BattleSpritePanel(rompanel.ROMPanel):
         self.curPaletteIdx = idx
         self.changeBattleSprite()
         self.changeAnimBattleSprite(True)
+        
+    def OnAddPalette(self):
+        # Защита: не больше 4 палитр
+        if len(self.battleSprite.palettes) >= 4:
+            return
+
+        # Новая палитра: цвет 0 — чёрный, цвета 1..15 — фиолетовые
+        cols = ["#000000"] + ["#ee00ee"] * 15
+        pal = data.Palette()
+        pal.init(cols)
+        pal.modified = True
+
+        # Добавляем в спрайт
+        self.battleSprite.palettes.append(pal)
+        self.battleSprite.modified = True
+
+        # Переключаемся на новую палитру
+        self.curPaletteIdx = len(self.battleSprite.palettes) - 1
+
+        # Обновляем список палитр
+        self.paletteList.blockSignals(True)
+        self.paletteList.clear()
+        self.paletteList.addItems(
+            ["Palette %i" % i for i in range(len(self.battleSprite.palettes))]
+        )
+        self.paletteList.setCurrentIndex(self.curPaletteIdx)
+        self.paletteList.blockSignals(False)
+
+        # Применяем и обновляем кнопку
+        self.changeBattleSprite()
+        self.updatePaletteButtons()
+        self.modify()
+
+    def updatePaletteButtons(self):
+        if not hasattr(self, "addPaletteButton"):
+            return
+        n = len(self.battleSprite.palettes)
+        self.addPaletteButton.setEnabled(n < 4)
+        self.addPaletteButton.setText(
+            f"Add Palette ({n}/4)" if n < 4 else "Max 4 Palettes"
+        )        
 
     def OnSelectFrame(self, idx):
         self.curFrameIdx = idx
@@ -470,6 +517,7 @@ class BattleSpritePanel(rompanel.ROMPanel):
             self.paletteList.clear()
             self.paletteList.addItems(["Palette %i" % i for i, p in enumerate(self.battleSprite.palettes)])
             self.paletteList.setCurrentIndex(self.curPaletteIdx)
+            self.updatePaletteButtons()
 
         self.palette = self.curPalette
         if shiboken6.isValid(self.editPanel):
