@@ -1,4 +1,4 @@
-"""Редактор карт (ASM) — просмотр + split в ASM-файлы."""
+"""Редактор карт (ASM) — просмотр + split + таблицы (read-only)."""
 import os
 from pathlib import Path
 
@@ -6,7 +6,8 @@ from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QListWidget, QLabel,
     QSplitter, QScrollArea, QComboBox, QMdiSubWindow,
     QPushButton, QProgressDialog, QMessageBox,
-    QTabWidget, QTableWidget, QTableWidgetItem, QHeaderView
+    QTabWidget, QTableWidget, QTableWidgetItem, QHeaderView,
+    QGroupBox, QCheckBox, QSizePolicy
 )
 from PySide6.QtCore import Qt, QTimer, QStandardPaths
 from PySide6.QtGui import QPainter, QPixmap, QImage, QColor
@@ -17,7 +18,6 @@ import parsers
 
 
 def get_cache_dir(rom_path=None):
-    """Папка кеша: %LOCALAPPDATA%/Caravan/maps/ (кроссплатформенно)."""
     base = QStandardPaths.writableLocation(
         QStandardPaths.StandardLocation.AppLocalDataLocation
     )
@@ -26,9 +26,11 @@ def get_cache_dir(rom_path=None):
     return Path(base) / "maps"
 
 
-class SimpleMapView(QWidget):
-    """Простой рендер карты из data.Map (Python-Caravan)."""
+# ============================================================
+#  Рендер карты
+# ============================================================
 
+class SimpleMapView(QWidget):
     BASE_BLOCK_SIZE = 24
 
     def __init__(self, py_map, palette, scale=1, parent=None):
@@ -58,7 +60,6 @@ class SimpleMapView(QWidget):
         except Exception as e:
             print(f"Ошибка палитры: {e}")
             return
-
         for blk in self.py_map.blocks:
             try:
                 buf = b""
@@ -76,14 +77,11 @@ class SimpleMapView(QWidget):
     def paintEvent(self, event):
         painter = QPainter(self)
         painter.fillRect(self.rect(), QColor(32, 32, 32))
-
         if not self.block_bmps:
             painter.end()
             return
-
         s = self.BASE_BLOCK_SIZE * self.scale
         layout = self.py_map.layoutData
-
         for y in range(64):
             for x in range(64):
                 idx = y * 64 + x
@@ -98,53 +96,85 @@ class SimpleMapView(QWidget):
                             Qt.KeepAspectRatio, Qt.FastTransformation
                         )
                     painter.drawPixmap(int(x * s), int(y * s), bmp)
-
         painter.end()
 
 
-class AreasTable(QTableWidget):
-    """Таблица Areas — порт MapAreaTableModel (read-only)."""
+# ============================================================
+#  Универсальная таблица
+# ============================================================
 
-    COLUMNS = [
-        "Index", "L1 X", "L1 Y", "L1 X'", "L1 Y'",
-        "L2 FX", "L2 FY", "L2 BX", "L2 BY",
-        "L1 PX", "L1 PY", "L2 PX", "L2 PY",
-        "L1 SX", "L1 SY", "L2 SX", "L2 SY",
-        "L1 Type", "Music"
-    ]
+def make_table(columns: list[str]) -> QTableWidget:
+    table = QTableWidget()
+    table.setColumnCount(len(columns))
+    table.setHorizontalHeaderLabels(columns)
+    table.setEditTriggers(QTableWidget.NoEditTriggers)
+    table.setSelectionBehavior(QTableWidget.SelectRows)
+    table.verticalHeader().setVisible(False)
+    table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
+    return table
 
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.setColumnCount(len(self.COLUMNS))
-        self.setHorizontalHeaderLabels(self.COLUMNS)
-        self.setEditTriggers(QTableWidget.NoEditTriggers)
-        self.setSelectionBehavior(QTableWidget.SelectRows)
-        self.verticalHeader().setVisible(False)
-        self.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
 
-    def set_areas(self, areas: list):
-        """Заполняет таблицу списком MapArea."""
-        self.setRowCount(len(areas))
-        for row, a in enumerate(areas):
-            values = [
-                row,
-                a.layer1StartX, a.layer1StartY,
-                a.layer1EndX, a.layer1EndY,
-                a.foregroundLayer2StartX, a.foregroundLayer2StartY,
-                a.backgroundLayer2StartX, a.backgroundLayer2StartY,
-                a.layer1ParallaxX, a.layer1ParallaxY,
-                a.layer2ParallaxX, a.layer2ParallaxY,
-                a.layer1AutoscrollX, a.layer1AutoscrollY,
-                a.layer2AutoscrollX, a.layer2AutoscrollY,
-                a.layerType,
-                a.defaultMusic,
-            ]
-            for col, val in enumerate(values):
-                item = QTableWidgetItem(str(val))
-                if col != 18:  # все числовые, кроме Music
-                    item.setTextAlignment(Qt.AlignCenter)
-                self.setItem(row, col, item)
+def fill_table(table: QTableWidget, rows: list[list]):
+    table.setRowCount(len(rows))
+    for r, values in enumerate(rows):
+        for c, val in enumerate(values):
+            item = QTableWidgetItem(str(val))
+            if not isinstance(val, str):
+                item.setTextAlignment(Qt.AlignCenter)
+            table.setItem(r, c, item)
 
+
+# ============================================================
+#  Правая панель View (чекбоксы — заглушки)
+# ============================================================
+
+def build_view_panel() -> QWidget:
+    w = QWidget()
+    w.setMaximumWidth(220)
+    layout = QVBoxLayout(w)
+    layout.setContentsMargins(4, 4, 4, 4)
+
+    # --- Основные ---
+    g1 = QGroupBox("View")
+    l1 = QVBoxLayout(g1)
+    l1.setSpacing(2)
+    l1.addWidget(QCheckBox("Show grid"))
+    l1.addWidget(QCheckBox("Show priority"))
+    l1.addWidget(QCheckBox("Exploration flags"))
+    ind1 = QCheckBox("   Areas")
+    ind2 = QCheckBox("   Warps")
+    ind3 = QCheckBox("   Triggers")
+    ind4 = QCheckBox("   Items")
+    ind5 = QCheckBox("   Vehicles")
+    for cb in (ind1, ind2, ind3, ind4, ind5):
+        l1.addWidget(cb)
+    l1.addWidget(QCheckBox("Flag Copies"))
+    l1.addWidget(QCheckBox("Step Copies"))
+    l1.addWidget(QCheckBox("Roof Copies"))
+    l1.addWidget(QCheckBox("Preview anim"))
+    layout.addWidget(g1)
+
+    # --- Areas display ---
+    g2 = QGroupBox("Areas display")
+    l2 = QVBoxLayout(g2)
+    l2.setSpacing(2)
+    l2.addWidget(QCheckBox("Upper layer overlay"))
+    l2.addWidget(QCheckBox("BG underlay"))
+    l2.addWidget(QCheckBox("Simulate parallax\nand autoscroll"))
+    layout.addWidget(g2)
+
+    layout.addStretch()
+
+    # Все чекбоксы выключены (заглушки)
+    for cb in w.findChildren(QCheckBox):
+        cb.setEnabled(False)
+
+    return w
+
+
+# ============================================================
+#  Главная панель
+# ============================================================
 
 class MapEditorPanel(rompanel.ROMPanel):
 
@@ -160,7 +190,6 @@ class MapEditorPanel(rompanel.ROMPanel):
         if getattr(self, "_maximized_done", False):
             return
         self._maximized_done = True
-
         w = self
         while w is not None:
             if isinstance(w, QMdiSubWindow):
@@ -169,7 +198,7 @@ class MapEditorPanel(rompanel.ROMPanel):
             w = w.parentWidget()
 
     def init(self):
-        # Список карт слева
+        # ============ Слева — список карт ============
         self.map_list = QListWidget()
         self.map_list.addItems(
             [f"Map {i:02d}" for i in range(len(self.rom.data["maps"]))]
@@ -181,14 +210,12 @@ class MapEditorPanel(rompanel.ROMPanel):
         left_layout.addWidget(QLabel("Maps:"))
         left_layout.addWidget(self.map_list)
 
-        # Правая часть
-        right = QWidget()
-        right_layout = QVBoxLayout(right)
+        # ============ Центр — верхняя панель + карта + вкладки ============
+        center = QWidget()
+        center_layout = QVBoxLayout(center)
 
-        # --- Верхняя панель ---
         top_bar = QHBoxLayout()
         top_bar.addWidget(QLabel("Scale:"))
-
         self.scale_combo = QComboBox()
         self.scale_combo.addItems(["1/4x", "1/2x", "1x", "2x", "4x"])
         self.scale_combo.setCurrentIndex(2)
@@ -196,7 +223,6 @@ class MapEditorPanel(rompanel.ROMPanel):
         top_bar.addWidget(self.scale_combo)
 
         top_bar.addSpacing(20)
-
         self.split_btn = QPushButton("Split to ASM")
         self.split_btn.clicked.connect(self._on_split_clicked)
         top_bar.addWidget(self.split_btn)
@@ -206,50 +232,100 @@ class MapEditorPanel(rompanel.ROMPanel):
         top_bar.addWidget(self.open_folder_btn)
 
         top_bar.addStretch()
-
         self.info_label = QLabel("Select a map...")
         top_bar.addWidget(self.info_label)
 
-        right_layout.addLayout(top_bar)
+        center_layout.addLayout(top_bar)
 
-        # --- Вертикальный сплиттер: карта сверху, вкладки снизу ---
+        # Вертикальный сплиттер: карта сверху, вкладки снизу
         v_splitter = QSplitter(Qt.Vertical)
 
-        # Верх — скролл с картой
         self.scroll_area = QScrollArea()
         self.scroll_area.setWidgetResizable(False)
         v_splitter.addWidget(self.scroll_area)
 
-        # Низ — вкладки
+        # ============ Вкладки ============
         self.tabs = QTabWidget()
-        self.tabs.setMinimumHeight(180)
+        self.tabs.setMinimumHeight(200)
 
-        # Вкладка Areas
-        self.areas_table = AreasTable()
+        # Areas
+        self.areas_table = make_table([
+            "Index", "L1 X", "L1 Y", "L1 X'", "L1 Y'",
+            "L2 FX", "L2 FY", "L2 BX", "L2 BY",
+            "L1 PX", "L1 PY", "L2 PX", "L2 PY",
+            "L1 SX", "L1 SY", "L2 SX", "L2 SY",
+            "L1 Type", "Music"
+        ])
         self.tabs.addTab(self.areas_table, "Areas")
 
-        # Заглушки для будущих вкладок
-        for name in ["Flag Copies", "Step Copies", "Roof Copies", "Warps", "Items", "Animations"]:
-            placeholder = QLabel(f"{name} — TODO")
-            placeholder.setAlignment(Qt.AlignCenter)
-            self.tabs.addTab(placeholder, name)
+        # Flag Copies
+        self.flag_table = make_table([
+            "Index", "Flag", "Flag Info",
+            "Source X", "Source Y", "Source X'", "Source Y'",
+            "Dest X", "Dest Y", "Comment"
+        ])
+        self.tabs.addTab(self.flag_table, "Flag Copies")
+
+        # Step Copies
+        self.step_table = make_table([
+            "Index", "Trigger X", "Trigger Y",
+            "Source X", "Source Y", "Source X'", "Source Y'",
+            "Dest X", "Dest Y", "Comment"
+        ])
+        self.tabs.addTab(self.step_table, "Step Copies")
+
+        # Roof Copies
+        self.roof_table = make_table([
+            "Index", "Trigger X", "Trigger Y",
+            "Source X", "Source Y", "Source X'", "Source Y'",
+            "Dest X", "Dest Y", "Comment"
+        ])
+        self.tabs.addTab(self.roof_table, "Roof Copies")
+
+        # Warps
+        self.warps_table = make_table([
+            "Index", "Trigger X", "Trigger Y", "Scroll Dir.",
+            "Dest Map", "Dest X", "Dest Y", "Facing", "Comment"
+        ])
+        self.tabs.addTab(self.warps_table, "Warps")
+
+        # Items (с подвкладками Chest/Other)
+        self.items_subtabs = QTabWidget()
+        self.chest_table = make_table([
+            "Index", "X", "Y", "Flag", "Flag Info", "Item", "Comment"
+        ])
+        self.other_table = make_table([
+            "Index", "X", "Y", "Flag", "Flag Info", "Item", "Comment"
+        ])
+        self.items_subtabs.addTab(self.chest_table, "Chest Items")
+        self.items_subtabs.addTab(self.other_table, "Other Items")
+        self.tabs.addTab(self.items_subtabs, "Items")
+
+        # Animations
+        self.anim_table = make_table([
+            "Index", "Start", "End", "Dest", "Delay"
+        ])
+        self.tabs.addTab(self.anim_table, "Animations")
 
         v_splitter.addWidget(self.tabs)
-        v_splitter.setSizes([600, 200])
+        v_splitter.setSizes([500, 250])
 
-        right_layout.addWidget(v_splitter)
+        center_layout.addWidget(v_splitter)
 
-        self.current_view = None
+        # ============ Справа — View panel ============
+        right_panel = build_view_panel()
 
-        # Главный сплиттер (карты слева | контент справа)
-        splitter_widget = QSplitter(Qt.Horizontal)
-        splitter_widget.addWidget(left)
-        splitter_widget.addWidget(right)
-        splitter_widget.setStretchFactor(0, 0)
-        splitter_widget.setStretchFactor(1, 1)
-        splitter_widget.setSizes([200, 800])
+        # ============ Главный сплиттер ============
+        main_splitter = QSplitter(Qt.Horizontal)
+        main_splitter.addWidget(left)
+        main_splitter.addWidget(center)
+        main_splitter.addWidget(right_panel)
+        main_splitter.setStretchFactor(0, 0)
+        main_splitter.setStretchFactor(1, 1)
+        main_splitter.setStretchFactor(2, 0)
+        main_splitter.setSizes([180, 900, 200])
 
-        self.sizer.addWidget(splitter_widget, 0, 0)
+        self.sizer.addWidget(main_splitter, 0, 0)
 
         # Кеш-директория
         self.cache_dir = None
@@ -277,7 +353,6 @@ class MapEditorPanel(rompanel.ROMPanel):
 
     def _on_split_clicked(self):
         if self.cache_dir is None:
-            QMessageBox.warning(self, "Split", "Не могу определить папку кеша.")
             return
         self._do_split(force=True)
 
@@ -302,25 +377,17 @@ class MapEditorPanel(rompanel.ROMPanel):
 
         def callback(current, total, map_id):
             progress.setValue(current)
-            progress.setLabelText(
-                f"Splitting map {map_id:02d} ({current}/{total})..."
-            )
+            progress.setLabelText(f"Splitting map {map_id:02d} ({current}/{total})...")
             from PySide6.QtWidgets import QApplication
             QApplication.processEvents()
 
         try:
-            splitter.split_all_maps(
-                self.rom, self.cache_dir,
-                progress_callback=callback
-            )
+            splitter.split_all_maps(self.rom, self.cache_dir, progress_callback=callback)
             (self.cache_dir / ".split_done").write_text("ok")
             progress.setValue(len(self.rom.data["maps"]))
-
             if force:
-                QMessageBox.information(
-                    self, "Split to ASM",
-                    f"Готово!\n\nФайлы в:\n{self.cache_dir}"
-                )
+                QMessageBox.information(self, "Split to ASM",
+                                        f"Готово!\n\nФайлы в:\n{self.cache_dir}")
         except Exception as e:
             import traceback
             traceback.print_exc()
@@ -329,12 +396,8 @@ class MapEditorPanel(rompanel.ROMPanel):
             progress.close()
 
     def _on_open_folder(self):
-        if self.cache_dir is None:
+        if self.cache_dir is None or not self.cache_dir.exists():
             return
-        if not self.cache_dir.exists():
-            QMessageBox.warning(self, "Open folder", "Папка ещё не создана.")
-            return
-
         import subprocess
         import sys
         path = str(self.cache_dir)
@@ -351,12 +414,7 @@ class MapEditorPanel(rompanel.ROMPanel):
 
     def _current_scale(self):
         text = self.scale_combo.currentText()
-        if text == "1/4x": return 0.25
-        if text == "1/2x": return 0.5
-        if text == "1x":   return 1
-        if text == "2x":   return 2
-        if text == "4x":   return 4
-        return 1
+        return {"1/4x": 0.25, "1/2x": 0.5, "1x": 1, "2x": 2, "4x": 4}.get(text, 1)
 
     def _on_scale_changed(self, _):
         if self.current_view:
@@ -372,42 +430,123 @@ class MapEditorPanel(rompanel.ROMPanel):
             py_map = self.rom.data["maps"][idx]
 
         self.info_label.setText(
-            f"Map {idx}  |  "
-            f"palette: {py_map.paletteIdx}  |  "
-            f"blocks: {len(py_map.blocks)}  |  "
-            f"areas: {len(py_map.areas)}  |  "
-            f"warps: {len(py_map.warps)}  |  "
-            f"items: {len(py_map.items)}"
+            f"Map {idx}  |  palette: {py_map.paletteIdx}  |  "
+            f"blocks: {len(py_map.blocks)}  |  areas: {len(py_map.areas)}  |  "
+            f"warps: {len(py_map.warps)}  |  items: {len(py_map.items)}"
         )
 
         palette = self.rom.data["palettes"][py_map.paletteIdx]
-
-        view = SimpleMapView(
-            py_map, palette,
-            scale=self._current_scale()
-        )
+        view = SimpleMapView(py_map, palette, scale=self._current_scale())
         self.current_view = view
         self.scroll_area.setWidget(view)
 
-        # --- Парсим ASM-файлы и заполняем таблицы ---
-        self._refresh_tables(idx)
+        self._refresh_all_tables(idx)
 
-    def _refresh_tables(self, idx):
-        """Читает ASM-файлы карты и заполняет таблицы."""
+    def _refresh_all_tables(self, idx):
         if self.cache_dir is None:
             return
         map_dir = self.cache_dir / f"map{idx:02d}"
         if not map_dir.exists():
-            print(f"[tables] Папка не найдена: {map_dir}")
             return
 
-        # --- Areas ---
         try:
-            areas_path = map_dir / "2-areas.asm"
-            areas = parsers.parse_areas_asm(areas_path)
-            self.areas_table.set_areas(areas)
-            print(f"[tables] Map {idx}: распарсено {len(areas)} areas")
+            # Areas
+            areas = parsers.parse_areas_asm(map_dir / "2-areas.asm")
+            rows = []
+            for i, a in enumerate(areas):
+                rows.append([
+                    i, a.layer1StartX, a.layer1StartY, a.layer1EndX, a.layer1EndY,
+                    a.foregroundLayer2StartX, a.foregroundLayer2StartY,
+                    a.backgroundLayer2StartX, a.backgroundLayer2StartY,
+                    a.layer1ParallaxX, a.layer1ParallaxY,
+                    a.layer2ParallaxX, a.layer2ParallaxY,
+                    a.layer1AutoscrollX, a.layer1AutoscrollY,
+                    a.layer2AutoscrollX, a.layer2AutoscrollY,
+                    a.layerType, a.defaultMusic
+                ])
+            fill_table(self.areas_table, rows)
+            print(f"[tables] Map {idx}: {len(areas)} areas")
+
+            # Flag Copies
+            flags = parsers.parse_flag_events_asm(map_dir / "3-flag-events.asm")
+            rows = []
+            for i, e in enumerate(flags):
+                rows.append([
+                    i, e.triggerX, parsers.get_flag_info(e.triggerX),
+                    e.sourceStartX, e.sourceStartY, e.sourceEndX, e.sourceEndY,
+                    e.destStartX, e.destStartY, e.comment or ""
+                ])
+            fill_table(self.flag_table, rows)
+            print(f"[tables] Map {idx}: {len(flags)} flag copies")
+
+            # Step Copies
+            steps = parsers.parse_step_events_asm(map_dir / "4-step-events.asm")
+            rows = []
+            for i, e in enumerate(steps):
+                rows.append([
+                    i, e.triggerX, e.triggerY,
+                    e.sourceStartX, e.sourceStartY, e.sourceEndX, e.sourceEndY,
+                    e.destStartX, e.destStartY, e.comment or ""
+                ])
+            fill_table(self.step_table, rows)
+            print(f"[tables] Map {idx}: {len(steps)} step copies")
+
+            # Roof Copies
+            roofs = parsers.parse_roof_events_asm(map_dir / "5-roof-events.asm")
+            rows = []
+            for i, e in enumerate(roofs):
+                rows.append([
+                    i, e.triggerX, e.triggerY,
+                    e.sourceStartX, e.sourceStartY, e.sourceEndX, e.sourceEndY,
+                    e.destStartX, e.destStartY, e.comment or ""
+                ])
+            fill_table(self.roof_table, rows)
+            print(f"[tables] Map {idx}: {len(roofs)} roof copies")
+
+            # Warps
+            warps = parsers.parse_warps_asm(map_dir / "6-warp-events.asm")
+            rows = []
+            for i, w in enumerate(warps):
+                rows.append([
+                    i, w.triggerX, w.triggerY,
+                    w.scrollDirection, w.destMap,
+                    w.destX, w.destY, w.facing, w.comment or ""
+                ])
+            fill_table(self.warps_table, rows)
+            print(f"[tables] Map {idx}: {len(warps)} warps")
+
+            # Chest Items
+            chests = parsers.parse_items_asm(map_dir / "7-chest-items.asm")
+            rows = []
+            for i, it in enumerate(chests):
+                rows.append([
+                    i, it.x, it.y, it.flag, parsers.get_flag_info(it.flag),
+                    it.item, it.comment or ""
+                ])
+            fill_table(self.chest_table, rows)
+            print(f"[tables] Map {idx}: {len(chests)} chest items")
+
+            # Other Items
+            others = parsers.parse_items_asm(map_dir / "8-other-items.asm")
+            rows = []
+            for i, it in enumerate(others):
+                rows.append([
+                    i, it.x, it.y, it.flag, parsers.get_flag_info(it.flag),
+                    it.item, it.comment or ""
+                ])
+            fill_table(self.other_table, rows)
+            print(f"[tables] Map {idx}: {len(others)} other items")
+
+            # Animations
+            anim_set = parsers.parse_animations_asm(map_dir / "9-animations.asm")
+            rows = []
+            for i, a in enumerate(anim_set.anims):
+                rows.append([i, a.start, a.end, a.dest, a.delay])
+            fill_table(self.anim_table, rows)
+            print(f"[tables] Map {idx}: {len(anim_set.anims)} animations, "
+                  f"tileset={anim_set.tilesetIdx}")
+
         except Exception as e:
             import traceback
             traceback.print_exc()
-            print(f"[tables] Ошибка парсинга areas: {e}")
+            print(f"[tables] Ошибка: {e}")
