@@ -118,7 +118,6 @@ class LayoutTree(QTreeWidget):
         QTreeWidgetItem(resources, ["Menu Icons"])
         QTreeWidgetItem(resources, ["Portraits"])
         QTreeWidgetItem(resources, ["Map Editor (ASM)"])
-        QTreeWidgetItem(resources, ["Map Definitions"])       
         QTreeWidgetItem(resources, ["Map Tiles"])
         QTreeWidgetItem(resources, ["Fonts"])
         other = QTreeWidgetItem(root, ["Other"])

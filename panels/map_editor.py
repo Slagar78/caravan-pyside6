@@ -7,7 +7,8 @@ from PySide6.QtWidgets import (
     QSplitter, QScrollArea, QComboBox, QMdiSubWindow,
     QPushButton, QProgressDialog, QMessageBox,
     QTabWidget, QTableWidget, QTableWidgetItem, QHeaderView,
-    QGroupBox, QCheckBox, QSizePolicy
+    QGroupBox, QCheckBox, QSizePolicy,
+    QGridLayout, QSpinBox
 )
 from PySide6.QtCore import Qt, QTimer, QStandardPaths
 from PySide6.QtGui import QPainter, QPixmap, QImage, QColor
@@ -173,6 +174,170 @@ def build_view_panel() -> QWidget:
 
 
 # ============================================================
+#  Панель Blockset (слева от карты)
+# ============================================================
+
+class BlocksetPanel(QWidget):
+    """Показывает все блоки карты в виде сетки (read-only).
+
+    Порт Java-панели MapBlocksetLayoutPanel.
+    Пока без выбора блока — только отображение.
+    """
+
+    BLOCK_SIZE = 24      # размер блока в пикселях (1x)
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.blocks = []
+        self.block_bmps = []
+        self.tiles_per_row = 10
+
+        # Заголовок
+        header = QLabel("Blockset")
+        header.setStyleSheet("font-weight: bold; padding: 4px;")
+
+        # Скролл с сеткой блоков
+        self.scroll = QScrollArea()
+        self.scroll.setWidgetResizable(True)
+        self.inner = QWidget()
+        self.inner.setStyleSheet("background: #2a2a2a;")
+        self.grid = QGridLayout(self.inner)
+        self.grid.setSpacing(0)
+        self.grid.setContentsMargins(4, 4, 4, 4)
+        self.scroll.setWidget(self.inner)
+
+        # Кнопки (пока заглушки)
+        btn_row = QHBoxLayout()
+        self.add_btn = QPushButton("Add")
+        self.clone_btn = QPushButton("Clone")
+        self.remove_btn = QPushButton("Remove")
+        for b in (self.add_btn, self.clone_btn, self.remove_btn):
+            b.setEnabled(False)
+            b.setMaximumWidth(80)
+            btn_row.addWidget(b)
+
+        # Опции (пока заглушки)
+        opts = QGroupBox("Blockset View")
+        opts_layout = QVBoxLayout(opts)
+        opts_layout.setSpacing(2)
+
+        self.cb_priority = QCheckBox("Show Priority")
+        self.cb_priority.setEnabled(False)
+        self.cb_grid = QCheckBox("Grid")
+        self.cb_grid.setEnabled(False)
+        opts_layout.addWidget(self.cb_priority)
+        opts_layout.addWidget(self.cb_grid)
+
+        tiles_row = QHBoxLayout()
+        tiles_row.addWidget(QLabel("Tiles per row:"))
+        self.spin_tiles = QSpinBox()
+        self.spin_tiles.setRange(1, 32)
+        self.spin_tiles.setValue(10)
+        self.spin_tiles.setEnabled(False)
+        tiles_row.addWidget(self.spin_tiles)
+        opts_layout.addLayout(tiles_row)
+
+        scale_row = QHBoxLayout()
+        scale_row.addWidget(QLabel("Scale:"))
+        self.combo_scale = QComboBox()
+        self.combo_scale.addItems(["1x", "2x", "3x"])
+        self.combo_scale.setEnabled(False)
+        scale_row.addWidget(self.combo_scale)
+        opts_layout.addLayout(scale_row)
+
+        # Собираем
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(2, 2, 2, 2)
+        layout.setSpacing(4)
+        layout.addWidget(header)
+        layout.addWidget(self.scroll, 1)
+        layout.addLayout(btn_row)
+        layout.addWidget(opts)
+
+    def set_map(self, py_map, palette):
+        """Загружает блоки карты и строит сетку миниатюр."""
+        self.blocks = list(getattr(py_map, "blocks", []) or [])
+        self.block_bmps = []
+
+        if not self.blocks:
+            self._rebuild_grid()
+            return
+
+        try:
+            rt = palette.rgbaTuples()
+        except Exception as e:
+            print(f"[blockset] Ошибка палитры: {e}")
+            self._rebuild_grid()
+            return
+
+        for blk in self.blocks:
+            try:
+                buf = b""
+                for row in blk.pixels:
+                    for p in row:
+                        idx = int(p, 16)
+                        for t in rt[idx]:
+                            buf += bytes([t])
+                img = QImage(buf, 24, 24, QImage.Format_RGBA8888)
+                self.block_bmps.append(QPixmap.fromImage(img))
+            except Exception as e:
+                print(f"[blockset] Ошибка блока: {e}")
+                self.block_bmps.append(QPixmap(24, 24))
+
+        self._rebuild_grid()
+
+    def _rebuild_grid(self):
+        """Перерисовывает сетку блоков."""
+        # Очищаем
+        while self.grid.count():
+            item = self.grid.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+
+        cols = self.tiles_per_row
+        CELL_STYLE = "border: 1px solid #555;"
+        LABEL_STYLE = "color: #ccc; font-size: 8pt; " + CELL_STYLE
+
+        # ===== Угловая пустая ячейка (0, 0) =====
+        corner = QLabel("")
+        corner.setStyleSheet(LABEL_STYLE)
+        corner.setFixedSize(28, 18)
+        corner.setAlignment(Qt.AlignCenter)
+        self.grid.addWidget(corner, 0, 0)
+
+        # ===== Верхняя строка — номера столбцов (0..9) =====
+        for c in range(cols):
+            lbl_col = QLabel(str(c))
+            lbl_col.setStyleSheet(LABEL_STYLE)
+            lbl_col.setFixedSize(self.BLOCK_SIZE, 18)
+            lbl_col.setAlignment(Qt.AlignCenter)
+            self.grid.addWidget(lbl_col, 0, c + 1)
+
+        # ===== Строки блоков =====
+        for i, bmp in enumerate(self.block_bmps):
+            row = i // cols + 1
+            col = i % cols
+
+            # Левая метка (0, 10, 20, ...)
+            if i % cols == 0:
+                lbl = QLabel(str(i))
+                lbl.setStyleSheet(LABEL_STYLE)
+                lbl.setFixedSize(28, self.BLOCK_SIZE)
+                lbl.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+                self.grid.addWidget(lbl, row, 0)
+
+            # Миниатюра блока
+            cell = QLabel()
+            cell.setPixmap(bmp)
+            cell.setFixedSize(self.BLOCK_SIZE, self.BLOCK_SIZE)
+            cell.setStyleSheet(CELL_STYLE)
+            cell.setToolTip(f"Block {i}")
+            self.grid.addWidget(cell, row, col + 1)
+
+        # Растяжка по правому краю
+        self.grid.setColumnStretch(cols + 1, 1)
+
+# ============================================================
 #  Главная панель
 # ============================================================
 
@@ -194,8 +359,16 @@ class MapEditorPanel(rompanel.ROMPanel):
         while w is not None:
             if isinstance(w, QMdiSubWindow):
                 w.showMaximized()
+                # После разворота — применить размеры панелей
+                QTimer.singleShot(50, self._apply_splitter_sizes)
                 return
             w = w.parentWidget()
+
+    def _apply_splitter_sizes(self):
+        """Применяет размеры панелей после разворота окна."""
+        # Найти главный сплиттер и задать размеры
+        if hasattr(self, "_main_splitter"):
+            self._main_splitter.setSizes([150, 300, 900, 200])
 
     def init(self):
         # ============ Слева — список карт ============
@@ -312,18 +485,29 @@ class MapEditorPanel(rompanel.ROMPanel):
 
         center_layout.addWidget(v_splitter)
 
+        # ============ Панель Blockset (между списком карт и картой) ============
+        self.blockset_panel = BlocksetPanel()
+        self.blockset_panel.setMinimumWidth(300)
+        self.blockset_panel.setMaximumWidth(340)
+
         # ============ Справа — View panel ============
         right_panel = build_view_panel()
 
         # ============ Главный сплиттер ============
-        main_splitter = QSplitter(Qt.Horizontal)
-        main_splitter.addWidget(left)
-        main_splitter.addWidget(center)
-        main_splitter.addWidget(right_panel)
+        self._main_splitter = QSplitter(Qt.Horizontal)
+        main_splitter = self._main_splitter
+        main_splitter.addWidget(left)                # 0 — список карт
+        main_splitter.addWidget(self.blockset_panel) # 1 — Blockset
+        main_splitter.addWidget(center)              # 2 — карта + вкладки
+        main_splitter.addWidget(right_panel)         # 3 — View
         main_splitter.setStretchFactor(0, 0)
-        main_splitter.setStretchFactor(1, 1)
-        main_splitter.setStretchFactor(2, 0)
-        main_splitter.setSizes([180, 900, 200])
+        main_splitter.setStretchFactor(1, 0)
+        main_splitter.setStretchFactor(2, 1)
+        main_splitter.setStretchFactor(3, 0)
+        main_splitter.setSizes([150, 300, 900, 200])
+
+        # ЗАПРЕЩАЕМ сжимать Blockset в 0 — сплиттер уже существует
+        main_splitter.setCollapsible(1, False)
 
         self.sizer.addWidget(main_splitter, 0, 0)
 
@@ -439,6 +623,9 @@ class MapEditorPanel(rompanel.ROMPanel):
         view = SimpleMapView(py_map, palette, scale=self._current_scale())
         self.current_view = view
         self.scroll_area.setWidget(view)
+
+        # Загружаем блоки в панель Blockset
+        self.blockset_panel.set_map(py_map, palette)
 
         self._refresh_all_tables(idx)
 
