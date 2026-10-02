@@ -20,4 +20,7 @@ pyinstaller --onefile --windowed --clean --noconfirm ^
     --hidden-import PIL ^
     --hidden-import PIL.Image ^
     --hidden-import shiboken6 ^
+    --paths=panels ^
+    --hidden-import splitter ^
+    --hidden-import parsers ^
     caravan.py

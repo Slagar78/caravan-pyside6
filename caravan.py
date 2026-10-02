@@ -177,6 +177,9 @@ class LayoutTree(QTreeWidget):
         QTreeWidgetItem(other, ["ROM Viewer"])
         self.expandAll()
 
+        # Изначально всё отключено — пока ROM не загружен
+        self.set_rom_loaded(False)
+
     def init(self):
         pass
 
@@ -185,6 +188,19 @@ class LayoutTree(QTreeWidget):
             item = self.takeTopLevelItem(0)
             del item
         self._init_structure()
+
+    def set_rom_loaded(self, loaded: bool):
+        """Включает/отключает все элементы дерева.
+
+        Пока ROM не загружен — серые, кликать нельзя.
+        """
+        self._set_enabled_recursive(self.invisibleRootItem(), loaded)
+
+    def _set_enabled_recursive(self, item, enabled):
+        for i in range(item.childCount()):
+            child = item.child(i)
+            child.setDisabled(not enabled)
+            self._set_enabled_recursive(child, enabled)
 
     @property
     def allItems(self):
@@ -295,6 +311,9 @@ class MainFrame(window.CaravanParentFrame):
         return action
 
     def OnLayoutTreeItem(self, item, column):
+        # Если ROM не загружен — игнорируем клик
+        if item.isDisabled():
+            return
         if item.childCount() == 0:
             self.spawnPluginWindow(item)
 
@@ -508,6 +527,9 @@ class MainFrame(window.CaravanParentFrame):
         dlg.close()
         self.actSaveProjectAs.setEnabled(True)
         self.actClose.setEnabled(True)
+
+        # ROM загружен — включаем дерево
+        self.layoutTree.set_rom_loaded(True)
 
     def initLayoutTree(self):
         dock = QDockWidget("Layout Tree", self)
