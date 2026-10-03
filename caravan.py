@@ -15,6 +15,10 @@ from PySide6.QtGui import QAction, QIcon, QFont
 
 sys.path.append("lib")
 
+# === Сначала chdir — до всего остального ===
+if getattr(sys, 'frozen', False):
+    os.chdir(sys._MEIPASS)
+
 app = QApplication(sys.argv)
 app.setApplicationName("Caravan")
 app.setStyle(QStyleFactory.create('Fusion'))
@@ -71,11 +75,28 @@ app.setStyleSheet("""
     }
 """)
 
-icon = QIcon("caravan.ico")
+# === Иконка — теперь после chdir, и сразу применяем ===
+icon = QIcon("ico/caravan.ico")
 
-import sys, os
-if getattr(sys, 'frozen', False):
-    os.chdir(sys._MEIPASS)
+print("=== ICON DEBUG ===")
+print("cwd:", os.getcwd())
+print("path:", os.path.abspath("ico/caravan.ico"))
+print("exists:", os.path.exists("ico/caravan.ico"))
+print("isNull:", icon.isNull())
+print("sizes:", icon.availableSizes())
+print("==================")
+
+app.setWindowIcon(icon)
+
+# === Windows: чтобы и в таскбаре была правильная иконка ===
+if sys.platform == "win32":
+    try:
+        import ctypes
+        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(
+            "caravan.app.1"
+        )
+    except Exception:
+        pass
 
 import asm, settings
 import rom, panellist, rompanel, changelog, window, consts, util, temp, layout
@@ -719,7 +740,12 @@ class MainFrame(window.CaravanParentFrame):
             print("=== КРИТИЧЕСКАЯ ОШИБКА ПРИ СОХРАНЕНИИ ===")
             traceback.print_exc()
             err = traceback.format_exc()
-            with open("save_error.log", "w", encoding="utf-8") as f:
+            if getattr(sys, 'frozen', False):
+                log_dir = os.path.dirname(sys.executable)
+            else:
+                log_dir = "."
+            log_path = os.path.join(log_dir, "save_error.log")
+            with open(log_path, "w", encoding="utf-8") as f:
                 f.write(err)
             QMessageBox.critical(self, "Save Error", 
                                "Error occurred. Check save_error.log for details.\n\n" + err)
@@ -904,5 +930,6 @@ class NewProjectDialog(QDialog):
 
 
 mw = MainFrame(None, -1, app)
+mw.setWindowIcon(icon)
 mw.show()
 app.exec()
