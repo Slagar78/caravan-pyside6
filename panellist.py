@@ -5,6 +5,8 @@ import default
 import backgrounds, battles, battle_floors, battle_sprites, spell_anims, dialogue, fonts, other_icons, maps, menu_icons, palettes, portraits, romviewer, sprites, tiles, weapon_sprites
 import map_editor
 
+from sf2edit import characters
+
 panelList = {
     "Battles": battles.BattlePanel,
     "Battle Backgrounds": backgrounds.BackgroundPanel,
@@ -19,13 +21,14 @@ panelList = {
     "Menu Icons": menu_icons.MenuIconPanel,
     "Palettes": palettes.PalettePanel,
     "Portraits": portraits.PortraitPanel,
+    "Characters": characters.CharacterPanel,      # ← (2) ДОБАВЛЕНО
     "ROM Viewer": romviewer.ROMViewerPanel,
     "Sprites": sprites.SpritePanel,
     "Map Tiles": tiles.TilePanel,
     "Weapon Sprites": weapon_sprites.WeaponSpritePanel,
 }
 
-sf2editList = ["Characters", "Classes", "Promotions", "Monsters", "Spells", "Items", "Shops"]
+sf2editList = ["Classes", "Promotions", "Monsters", "Spells", "Items", "Shops"]   # ← (3) УБРАН "Characters"
 
 def getPanelClass(name):
     if name in panelList:
