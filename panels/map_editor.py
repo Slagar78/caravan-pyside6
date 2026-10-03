@@ -80,13 +80,27 @@ def detect_screen_preset():
 class SimpleMapView(QWidget):
     BASE_BLOCK_SIZE = 24
 
-    def __init__(self, py_map, palette, scale=1, parent=None):
+    # Сигнал: изменилась ячейка карты. (idx, old_value, new_value)
+    blockPainted = Signal(int, int, int)
+
+    def __init__(self, py_map, palette, scale=1, parent=None,
+                 get_paint_block=None, editable=False):
         super().__init__(parent)
         self.py_map = py_map
         self.palette = palette
         self.scale = scale
         self.show_grid = False
         self.block_bmps = []
+
+        # === Режим редактирования ===
+        self.editable = editable
+        self.get_paint_block = get_paint_block   # callable(button) → block_idx
+        self._painting = False
+        self._last_painted_idx = -1
+
+        if self.editable:
+            self.setCursor(Qt.ArrowCursor)   # по умолчанию — стрелка
+
         self._rebuild()
         self._update_size()
 
@@ -121,6 +135,59 @@ class SimpleMapView(QWidget):
             except Exception as e:
                 print(f"Ошибка блока: {e}")
                 self.block_bmps.append(QPixmap(24, 24))
+
+    def _pos_to_idx(self, pos):
+        """Переводит координаты мыши в индекс ячейки карты (0..4095) или -1."""
+        s = self.BASE_BLOCK_SIZE * self.scale
+        x = int(pos.x() // s)
+        y = int(pos.y() // s)
+        if 0 <= x < 64 and 0 <= y < 64:
+            return y * 64 + x
+        return -1
+
+    def _paint_at(self, pos, button):
+        """Рисует один блок в позиции pos. Сохраняет верхние 6 бит (флаги)."""
+        if not self.editable or self.get_paint_block is None:
+            return
+        idx = self._pos_to_idx(pos)
+        if idx < 0 or idx == self._last_painted_idx:
+            return
+
+        block_idx = self.get_paint_block(button)
+        if block_idx is None or block_idx < 0:
+            return
+
+        old = self.py_map.layoutData[idx]
+        new = (old & 0xFC00) | (block_idx & 0x3FF)
+
+        self._last_painted_idx = idx
+        if new == old:
+            return
+
+        self.py_map.layoutData[idx] = new
+        self.py_map.modified = True
+        self.update()
+        self.blockPainted.emit(idx, old, new)
+
+    def mousePressEvent(self, event):
+        if not self.editable:
+            return
+        if event.button() in (Qt.LeftButton, Qt.RightButton):
+            self._painting = True
+            self._last_painted_idx = -1
+            self._paint_at(event.pos(), event.button())
+
+    def mouseMoveEvent(self, event):
+        if not self._painting or not self.editable:
+            return
+        if event.buttons() & Qt.LeftButton:
+            self._paint_at(event.pos(), Qt.LeftButton)
+        elif event.buttons() & Qt.RightButton:
+            self._paint_at(event.pos(), Qt.RightButton)
+
+    def mouseReleaseEvent(self, event):
+        self._painting = False
+        self._last_painted_idx = -1
 
     def paintEvent(self, event):
         painter = QPainter(self)
@@ -298,6 +365,10 @@ class BlocksetPanel(QWidget):
     Порт Java-панели MapBlocksetLayoutPanel.
     """
 
+    # Сигнал: кликнули на блок. Передаём (left_idx, right_idx), 
+    # -1 если не выбран.
+    blockSelected = Signal(int, int)
+
     BLOCK_SIZE = 24      # размер блока в пикселях (1x)
 
     def __init__(self, parent=None):
@@ -439,6 +510,10 @@ class BlocksetPanel(QWidget):
         self.blocks = list(getattr(py_map, "blocks", []) or [])
         self.block_bmps = []
 
+        # === Полный сброс выбора ===
+        self.left_selected_index = -1
+        self.right_selected_index = -1
+
         # Сбрасываем оба превью
         self.left_preview.setPixmap(QPixmap())
         self.left_preview.setText("—")
@@ -446,6 +521,9 @@ class BlocksetPanel(QWidget):
         self.right_preview.setPixmap(QPixmap())
         self.right_preview.setText("—")
         self.right_index_label.setText("")
+
+        # Сообщаем наружу, что выбор потерян
+        self.blockSelected.emit(-1, -1)
 
         if not self.blocks:
             self._rebuild_grid()
@@ -543,6 +621,8 @@ class BlocksetPanel(QWidget):
         self.left_index_label.setText(f"Block {index}")
 
         self._refresh_cell_highlight()
+        self.blockSelected.emit(self.left_selected_index,
+                                self.right_selected_index)
 
     def _on_block_right_clicked(self, index: int):
         """ПКМ → правый квадрат + розовая рамка в сетке."""
@@ -557,6 +637,8 @@ class BlocksetPanel(QWidget):
         self.right_index_label.setText(f"Block {index}")
 
         self._refresh_cell_highlight()
+        self.blockSelected.emit(self.left_selected_index,
+                                self.right_selected_index)
 
     def _refresh_cell_highlight(self):
         """Обновляет рамки у выбранных блоков в сетке.
@@ -622,11 +704,18 @@ class MapEditorPanel(rompanel.ROMPanel):
         """Применяет размеры панелей после разворота окна."""
         if hasattr(self, "_main_splitter") and hasattr(self, "_auto_sizes"):
             self._main_splitter.setSizes(list(self._auto_sizes))
-
+       
     def init(self):
         # === Авто-детект экрана — один раз при старте ===
         self._auto_sizes, self._auto_map_scale = detect_screen_preset()
         print(f"[screen] sizes={self._auto_sizes} scale={self._auto_map_scale}")
+
+        # === Состояние редактора карты ===
+        self.paint_left = -1       # индекс блока для ЛКМ (-1 = не выбран)
+        self.paint_right = -1      # индекс блока для ПКМ (-1 = не выбран)
+        self.undo_stack = []       # [(idx, old_val, new_val), ...]
+        self.redo_stack = []
+        self.current_view = None        
 
         # ============ Слева — список карт ============
         self.map_list = QListWidget()
@@ -665,6 +754,17 @@ class MapEditorPanel(rompanel.ROMPanel):
         self.open_folder_btn = QPushButton("Open ASM folder")
         self.open_folder_btn.clicked.connect(self._on_open_folder)
         top_bar.addWidget(self.open_folder_btn)
+
+        top_bar.addSpacing(20)
+        self.undo_btn = QPushButton("↶ Undo")
+        self.undo_btn.clicked.connect(self._undo)
+        self.undo_btn.setEnabled(False)
+        top_bar.addWidget(self.undo_btn)
+
+        self.redo_btn = QPushButton("↷ Redo")
+        self.redo_btn.clicked.connect(self._redo)
+        self.redo_btn.setEnabled(False)
+        top_bar.addWidget(self.redo_btn)
 
         top_bar.addStretch()
         self.info_label = QLabel("Select a map...")
@@ -751,6 +851,7 @@ class MapEditorPanel(rompanel.ROMPanel):
         self.blockset_panel = BlocksetPanel()
         self.blockset_panel.setMinimumWidth(150)
         self.blockset_panel.setMaximumWidth(340)
+        self.blockset_panel.blockSelected.connect(self._on_block_selected)
 
         # ============ Справа — View panel ============
         right_panel, self.view_cbs = build_view_panel()
@@ -883,6 +984,68 @@ class MapEditorPanel(rompanel.ROMPanel):
         if self.current_view:
             self.current_view.set_scale(self._current_scale())
 
+    # ============================================================
+    #  Редактирование карты
+    # ============================================================
+
+    def _on_block_selected(self, left_idx: int, right_idx: int):
+        """Пользователь выбрал блок в BlocksetPanel.
+        
+        -1 в BlocksetPanel означает «не выбран» — сохраняем как есть.
+        """
+        self.paint_left = left_idx
+        self.paint_right = right_idx
+
+        # Курсор: крестик, если есть хоть один выбранный блок
+        if self.current_view and self.current_view.editable:
+            if left_idx >= 0 or right_idx >= 0:
+                self.current_view.setCursor(Qt.CrossCursor)
+            else:
+                self.current_view.setCursor(Qt.ArrowCursor)
+
+    def _get_paint_block(self, button):
+        """Возвращает индекс блока для данной кнопки мыши.
+        
+        Возвращает -1, если блок для этой кнопки не выбран —
+        тогда рисование не выполняется.
+        """
+        if button == Qt.LeftButton:
+            return self.paint_left
+        elif button == Qt.RightButton:
+            return self.paint_right
+        return -1
+
+    def _on_block_painted(self, idx: int, old_val: int, new_val: int):
+        """Пользователь нарисовал блок — пушим в undo."""
+        self.undo_stack.append((idx, old_val, new_val))
+        self.redo_stack.clear()
+        self._update_undo_buttons()
+        if hasattr(self, "parent") and hasattr(self.parent, "modify"):
+            self.parent.modify()
+
+    def _undo(self):
+        if not self.undo_stack:
+            return
+        idx, old_val, new_val = self.undo_stack.pop()
+        self.current_view.py_map.layoutData[idx] = old_val
+        self.current_view.update()
+        self.redo_stack.append((idx, old_val, new_val))
+        self._update_undo_buttons()
+
+    def _redo(self):
+        if not self.redo_stack:
+            return
+        idx, old_val, new_val = self.redo_stack.pop()
+        self.current_view.py_map.layoutData[idx] = new_val
+        self.current_view.update()
+        self.undo_stack.append((idx, old_val, new_val))
+        self._update_undo_buttons()
+
+    def _update_undo_buttons(self):
+        self.undo_btn.setEnabled(bool(self.undo_stack))
+        self.redo_btn.setEnabled(bool(self.redo_stack))
+
+
     def _on_map_selected(self, idx):
         if idx < 0:
             return
@@ -899,12 +1062,27 @@ class MapEditorPanel(rompanel.ROMPanel):
         )
 
         palette = self.rom.data["palettes"][py_map.paletteIdx]
-        view = SimpleMapView(py_map, palette, scale=self._current_scale())
+        view = SimpleMapView(
+            py_map, palette,
+            scale=self._current_scale(),
+            editable=True,
+            get_paint_block=self._get_paint_block,
+        )
         view.show_grid = self.view_cbs["grid"].isChecked()
+        view.blockPainted.connect(self._on_block_painted)
         self.current_view = view
         self.scroll_area.setWidget(view)
 
-        # Загружаем блоки в панель Blockset
+        # При смене карты undo/redo сбрасываем
+        self.undo_stack.clear()
+        self.redo_stack.clear()
+        self._update_undo_buttons()
+
+        # Сбрасываем выбор блока (paint_left/right) перед загрузкой
+        self.paint_left = -1
+        self.paint_right = -1
+
+        # Загружаем блоки в панель Blockset (внутри тоже эмитится blockSelected(-1,-1))
         self.blockset_panel.set_map(py_map, palette)
 
         self._refresh_all_tables(idx)
