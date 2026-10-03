@@ -11,6 +11,7 @@ from sf2edit import promotions
 from sf2edit import monsters
 from sf2edit import spells
 from sf2edit import items
+from sf2edit import shops
 
 panelList = {
     "Battles": battles.BattlePanel,
@@ -32,13 +33,12 @@ panelList = {
     "Monsters":    monsters.MonsterPanel,
     "Spells":      spells.SpellPanel,
     "Items":       items.ItemPanel,
+    "Shops":       shops.ShopPanel,
     "ROM Viewer": romviewer.ROMViewerPanel,
     "Sprites": sprites.SpritePanel,
     "Map Tiles": tiles.TilePanel,
     "Weapon Sprites": weapon_sprites.WeaponSpritePanel,
 }
-
-sf2editList = ["Shops"]   # ← убрал "Spells"
 
 def getPanelClass(name):
     if name in panelList:
