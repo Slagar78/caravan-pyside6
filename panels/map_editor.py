@@ -8,7 +8,8 @@ from PySide6.QtWidgets import (
     QPushButton, QProgressDialog, QMessageBox,
     QTabWidget, QTableWidget, QTableWidgetItem, QHeaderView,
     QGroupBox, QCheckBox, QSizePolicy,
-    QGridLayout, QSpinBox
+    QGridLayout, QSpinBox,
+    QRadioButton, QButtonGroup
 )
 from PySide6.QtCore import Qt, QTimer, QStandardPaths, Signal
 from PySide6.QtGui import QPainter, QPixmap, QImage, QColor, QPen, QGuiApplication
@@ -369,6 +370,9 @@ class BlocksetPanel(QWidget):
     # -1 если не выбран.
     blockSelected = Signal(int, int)
 
+    # Сигнал: сменился режим. 0 = Paint Blocks, иначе — маска флага.
+    paintModeChanged = Signal(int)
+
     BLOCK_SIZE = 24      # размер блока в пикселях (1x)
 
     def __init__(self, parent=None):
@@ -395,13 +399,26 @@ class BlocksetPanel(QWidget):
         self.grid.setContentsMargins(4, 4, 4, 4)
         self.scroll.setWidget(self.inner)
 
-        # ===== Selected Blocks: Left + Right рядом =====
-        preview_group = QGroupBox("Selected Blocks")
-        preview_layout = QHBoxLayout(preview_group)
+        # ===== Вкладки: Selected Blocks / Exploration Flags =====
+        self.mode_tabs = QTabWidget()
+        self.mode_tabs.setStyleSheet("""
+            QTabBar::tab {
+                padding: 6px 10px;
+                font-size: 9pt;
+            }
+            QTabBar::tab:selected {
+                background: #3b82f6;
+                color: white;
+            }
+        """)
+
+        # --- Вкладка 1: Selected Blocks ---
+        tab_preview = QWidget()
+        preview_layout = QHBoxLayout(tab_preview)
         preview_layout.setContentsMargins(4, 4, 4, 4)
         preview_layout.setSpacing(12)
 
-        # --- Left click ---
+        # Left click
         left_col = QVBoxLayout()
         left_col.setSpacing(2)
         left_lbl = QLabel("Left click")
@@ -427,7 +444,7 @@ class BlocksetPanel(QWidget):
         self.left_index_label.setStyleSheet("color: #888; font-size: 8pt;")
         left_col.addWidget(self.left_index_label)
 
-        # --- Right click ---
+        # Right click
         right_col = QVBoxLayout()
         right_col.setSpacing(2)
         right_lbl = QLabel("Right click")
@@ -453,8 +470,36 @@ class BlocksetPanel(QWidget):
         self.right_index_label.setStyleSheet("color: #888; font-size: 8pt;")
         right_col.addWidget(self.right_index_label)
 
+        preview_layout.addStretch(1)     # слева — воздух
         preview_layout.addLayout(left_col)
         preview_layout.addLayout(right_col)
+        preview_layout.addStretch(1)     # справа — воздух
+
+        self.mode_tabs.addTab(tab_preview, "Selected Blocks")
+
+        # --- Вкладка 2: Exploration Flags ---
+        tab_flags = QWidget()
+        flags_layout = QVBoxLayout(tab_flags)
+        flags_layout.setContentsMargins(4, 4, 4, 4)
+        flags_layout.setSpacing(2)
+
+        self.radio_obstructed = QRadioButton("Obstructed")
+        self.radio_stairs = QRadioButton("Stairs")
+        self.radio_obstructed.setChecked(True)
+
+        self._flag_group = QButtonGroup(self)
+        self._flag_group.addButton(self.radio_obstructed, 1)   # mask 0xC000
+        self._flag_group.addButton(self.radio_stairs, 2)       # mask 0x4000
+        self._flag_group.buttonClicked.connect(self._on_flag_changed)
+
+        flags_layout.addWidget(self.radio_obstructed)
+        flags_layout.addWidget(self.radio_stairs)
+        flags_layout.addStretch()
+
+        self.mode_tabs.addTab(tab_flags, "Exploration Flags")
+
+        # Переключение вкладок — эмитим режим
+        self.mode_tabs.currentChanged.connect(self._on_tab_changed)
 
         # Кнопки (пока заглушки)
         btn_row = QHBoxLayout()
@@ -501,7 +546,7 @@ class BlocksetPanel(QWidget):
         layout.setSpacing(4)
         layout.addWidget(header)
         layout.addWidget(self.scroll, 1)
-        layout.addWidget(preview_group)
+        layout.addWidget(self.mode_tabs)
         layout.addLayout(btn_row)
         layout.addWidget(opts)
 
@@ -640,6 +685,29 @@ class BlocksetPanel(QWidget):
         self.blockSelected.emit(self.left_selected_index,
                                 self.right_selected_index)
 
+    def _on_tab_changed(self, idx: int):
+        """Сменилась вкладка. Вкладка 0 — Paint Blocks, вкладка 1 — флаги."""
+        if idx == 0:
+            self.paintModeChanged.emit(0)
+        else:
+            self._emit_current_flag()
+
+    def _on_flag_changed(self, btn):
+        """Переключили радио внутри Exploration Flags."""
+        if self.mode_tabs.currentIndex() == 1:
+            self._emit_current_flag()
+
+    def _emit_current_flag(self):
+        """Эмитит маску текущего выбранного флага."""
+        mode_id = self._flag_group.checkedId()
+        if mode_id == 1:
+            mask = 0xC000   # Obstructed
+        elif mode_id == 2:
+            mask = 0x4000   # Stairs
+        else:
+            mask = 0
+        self.paintModeChanged.emit(mask)
+
     def _refresh_cell_highlight(self):
         """Обновляет рамки у выбранных блоков в сетке.
 
@@ -713,6 +781,7 @@ class MapEditorPanel(rompanel.ROMPanel):
         # === Состояние редактора карты ===
         self.paint_left = -1       # индекс блока для ЛКМ (-1 = не выбран)
         self.paint_right = -1      # индекс блока для ПКМ (-1 = не выбран)
+        self.paint_mode = 0        # 0 = Paint Blocks, иначе — маска флага
         self.undo_stack = []       # [(idx, old_val, new_val), ...]
         self.redo_stack = []
         self.current_view = None        
@@ -852,6 +921,7 @@ class MapEditorPanel(rompanel.ROMPanel):
         self.blockset_panel.setMinimumWidth(150)
         self.blockset_panel.setMaximumWidth(340)
         self.blockset_panel.blockSelected.connect(self._on_block_selected)
+        self.blockset_panel.paintModeChanged.connect(self._on_paint_mode_changed)
 
         # ============ Справа — View panel ============
         right_panel, self.view_cbs = build_view_panel()
@@ -1003,12 +1073,28 @@ class MapEditorPanel(rompanel.ROMPanel):
             else:
                 self.current_view.setCursor(Qt.ArrowCursor)
 
+    def _on_paint_mode_changed(self, mask: int):
+        """Сменился режим. Пока только запоминаем — само редактирование флагов позже."""
+        self.paint_mode = mask
+        print(f"[paint_mode] mask = 0x{mask:04X}")
+        # Курсор: крестик, если есть хоть один активный режим
+        if self.current_view and self.current_view.editable:
+            if mask != 0 or self.paint_left >= 0 or self.paint_right >= 0:
+                self.current_view.setCursor(Qt.CrossCursor)
+            else:
+                self.current_view.setCursor(Qt.ArrowCursor)
+
     def _get_paint_block(self, button):
         """Возвращает индекс блока для данной кнопки мыши.
         
-        Возвращает -1, если блок для этой кнопки не выбран —
-        тогда рисование не выполняется.
+        Возвращает -1, если:
+          - блок для этой кнопки не выбран;
+          - мы в режиме флагов (paint_mode != 0) — блоки не рисуем.
         """
+        # Режим флагов — блоки запрещены
+        if self.paint_mode != 0:
+            return -1
+
         if button == Qt.LeftButton:
             return self.paint_left
         elif button == Qt.RightButton:
