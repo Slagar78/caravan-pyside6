@@ -11,7 +11,7 @@ from PySide6.QtWidgets import (
     QGridLayout, QSpinBox
 )
 from PySide6.QtCore import Qt, QTimer, QStandardPaths, Signal
-from PySide6.QtGui import QPainter, QPixmap, QImage, QColor, QPen
+from PySide6.QtGui import QPainter, QPixmap, QImage, QColor, QPen, QGuiApplication
 import rompanel
 import splitter
 import parsers
@@ -47,6 +47,31 @@ def get_cache_dir(rom_path=None):
         base = str(Path.home() / ".caravan")
     return Path(base) / "maps"
 
+# ============================================================
+#  Авто-определение раскладки под экран
+# ============================================================
+
+# (min_width, sizes,                          map_scale)
+SCREEN_PRESETS = [
+    (2500, (180, 340, 1200, 240), 2.0 ),  # QHD+
+    (1900, (150, 300,  900, 200), 1.0 ),  # Full HD / WUXGA
+    (1580, (130, 270,  800, 170), 1.0 ),  # 1600x900
+    (1420, (110, 240,  700, 150), 0.5 ),  # 1440x900
+    (1340, (100, 200,  600, 140), 0.5 ),  # 1366x768
+    (0,    ( 90, 170,  500, 130), 0.5 ),  # 1280 и меньше — карта 1/2x, скролл всё равно есть
+]
+
+
+def detect_screen_preset():
+    """Возвращает (sizes, map_scale)."""
+    screen = QGuiApplication.primaryScreen()
+    if screen is None:
+        return SCREEN_PRESETS[1][1], SCREEN_PRESETS[1][2]
+    w = screen.availableGeometry().width()
+    for min_w, sizes, scale in SCREEN_PRESETS:
+        if w >= min_w:
+            return sizes, scale
+    return SCREEN_PRESETS[-1][1], SCREEN_PRESETS[-1][2]
 
 # ============================================================
 #  Рендер карты
@@ -167,6 +192,7 @@ def fill_table(table: QTableWidget, rows: list[list]):
 def build_view_panel():
     """Возвращает (widget, cbs) — словарь с чекбоксами."""
     w = QWidget()
+    w.setMinimumWidth(120)
     w.setMaximumWidth(220)
     layout = QVBoxLayout(w)
     layout.setContentsMargins(4, 4, 4, 4)
@@ -594,11 +620,14 @@ class MapEditorPanel(rompanel.ROMPanel):
 
     def _apply_splitter_sizes(self):
         """Применяет размеры панелей после разворота окна."""
-        # Найти главный сплиттер и задать размеры
-        if hasattr(self, "_main_splitter"):
-            self._main_splitter.setSizes([150, 300, 900, 200])
+        if hasattr(self, "_main_splitter") and hasattr(self, "_auto_sizes"):
+            self._main_splitter.setSizes(list(self._auto_sizes))
 
     def init(self):
+        # === Авто-детект экрана — один раз при старте ===
+        self._auto_sizes, self._auto_map_scale = detect_screen_preset()
+        print(f"[screen] sizes={self._auto_sizes} scale={self._auto_map_scale}")
+
         # ============ Слева — список карт ============
         self.map_list = QListWidget()
         self.map_list.addItems(
@@ -607,6 +636,8 @@ class MapEditorPanel(rompanel.ROMPanel):
         self.map_list.currentRowChanged.connect(self._on_map_selected)
 
         left = QWidget()
+        left.setMinimumWidth(80)
+        left.setMaximumWidth(200)
         left_layout = QVBoxLayout(left)
         left_layout.addWidget(QLabel("Maps:"))
         left_layout.addWidget(self.map_list)
@@ -619,7 +650,10 @@ class MapEditorPanel(rompanel.ROMPanel):
         top_bar.addWidget(QLabel("Scale:"))
         self.scale_combo = QComboBox()
         self.scale_combo.addItems(["1/4x", "1/2x", "1x", "2x", "4x"])
-        self.scale_combo.setCurrentIndex(2)
+        _scale_to_index = {0.25: 0, 0.5: 1, 1.0: 2, 2.0: 3, 4.0: 4}
+        self.scale_combo.setCurrentIndex(
+            _scale_to_index.get(self._auto_map_scale, 2)
+        )
         self.scale_combo.currentIndexChanged.connect(self._on_scale_changed)
         top_bar.addWidget(self.scale_combo)
 
@@ -715,7 +749,7 @@ class MapEditorPanel(rompanel.ROMPanel):
 
         # ============ Панель Blockset (между списком карт и картой) ============
         self.blockset_panel = BlocksetPanel()
-        self.blockset_panel.setMinimumWidth(300)
+        self.blockset_panel.setMinimumWidth(150)
         self.blockset_panel.setMaximumWidth(340)
 
         # ============ Справа — View panel ============
@@ -740,10 +774,13 @@ class MapEditorPanel(rompanel.ROMPanel):
         main_splitter.setStretchFactor(1, 0)
         main_splitter.setStretchFactor(2, 1)
         main_splitter.setStretchFactor(3, 0)
-        main_splitter.setSizes([150, 300, 900, 200])
 
-        # ЗАПРЕЩАЕМ сжимать Blockset в 0 — сплиттер уже существует
-        main_splitter.setCollapsible(1, False)
+        # === Раскладка под экран (авто-детект из начала init) ===
+        main_splitter.setSizes(list(self._auto_sizes))
+
+        # Ничего не прячем — разрешаем сжиматься
+        main_splitter.setCollapsible(1, True)
+        main_splitter.setCollapsible(3, True)
 
         self.sizer.addWidget(main_splitter, 0, 0)
 
