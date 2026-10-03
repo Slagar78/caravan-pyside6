@@ -43,3 +43,19 @@ Full license text: [creativecommons.org/licenses/by-nc/4.0](https://creativecomm
 ---
 
 ## Build (Windows)
+Build (Windows)
+pyinstaller --onefile --windowed --clean --noconfirm ^
+    --name "Caravan" ^
+    --icon=ico/caravan.ico ^
+    --add-data "caravan.cfg;." ^
+    --add-data "68k.xml;." ^
+    --add-data "alpha.png;." ^
+    --add-data "ico;ico" ^
+    --add-data "panels;panels" ^
+    --hidden-import PIL ^
+    --hidden-import PIL.Image ^
+    --hidden-import shiboken6 ^
+    --paths=panels ^
+    --hidden-import splitter ^
+    --hidden-import parsers ^
+    caravan.py
