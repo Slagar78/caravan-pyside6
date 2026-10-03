@@ -85,7 +85,7 @@ class SimpleMapView(QWidget):
     blockPainted = Signal(int, int, int)
 
     def __init__(self, py_map, palette, scale=1, parent=None,
-                 get_paint_block=None, editable=False):
+                 get_paint_block=None, get_paint_mode=None, editable=False):
         super().__init__(parent)
         self.py_map = py_map
         self.palette = palette
@@ -97,11 +97,14 @@ class SimpleMapView(QWidget):
         # === Режим редактирования ===
         self.editable = editable
         self.get_paint_block = get_paint_block   # callable(button) → block_idx
+        self.get_paint_mode = get_paint_mode     # callable() → маска флага
         self._painting = False
         self._last_painted_idx = -1
+        self._hover_idx = -1                     # ← под курсором
 
         if self.editable:
-            self.setCursor(Qt.ArrowCursor)   # по умолчанию — стрелка
+            self.setCursor(Qt.ArrowCursor)
+            self.setMouseTracking(True)          # ← чтобы mouseMoveEvent работал без зажатия
 
         self._rebuild()
         self._update_size()
@@ -148,19 +151,36 @@ class SimpleMapView(QWidget):
         return -1
 
     def _paint_at(self, pos, button):
-        """Рисует один блок в позиции pos. Сохраняет верхние 6 бит (флаги)."""
-        if not self.editable or self.get_paint_block is None:
+        """Рисует блок или ставит/снимает флаг — в зависимости от paint_mode."""
+        if not self.editable:
             return
         idx = self._pos_to_idx(pos)
         if idx < 0 or idx == self._last_painted_idx:
             return
 
-        block_idx = self.get_paint_block(button)
-        if block_idx is None or block_idx < 0:
-            return
-
         old = self.py_map.layoutData[idx]
-        new = (old & 0xFC00) | (block_idx & 0x3FF)
+        mask = self.get_paint_mode() if self.get_paint_mode else 0
+
+        if mask == 0:
+            # === Режим Paint Blocks ===
+            if self.get_paint_block is None:
+                return
+            block_idx = self.get_paint_block(button)
+            if block_idx is None or block_idx < 0:
+                return
+            new = (old & 0xFC00) | (block_idx & 0x3FF)
+        else:
+            # === Режим флагов ===
+            if button == Qt.LeftButton:
+                # ЛКМ — поставить флаг (стерев старый explore-флаг)
+                if (old & mask) == mask:
+                    return
+                new = (old & ~0xC000) | mask
+            elif button == Qt.RightButton:
+                # ПКМ — снять конкретный флаг
+                new = old & ~mask
+            else:
+                return
 
         self._last_painted_idx = idx
         if new == old:
@@ -180,7 +200,16 @@ class SimpleMapView(QWidget):
             self._paint_at(event.pos(), event.button())
 
     def mouseMoveEvent(self, event):
-        if not self._painting or not self.editable:
+        if not self.editable:
+            return
+
+        # Обновляем hover для ghost preview (всегда, даже без зажатой кнопки)
+        new_hover = self._pos_to_idx(event.pos())
+        if new_hover != self._hover_idx:
+            self._hover_idx = new_hover
+            self.update()
+
+        if not self._painting:
             return
         if event.buttons() & Qt.LeftButton:
             self._paint_at(event.pos(), Qt.LeftButton)
@@ -190,6 +219,12 @@ class SimpleMapView(QWidget):
     def mouseReleaseEvent(self, event):
         self._painting = False
         self._last_painted_idx = -1
+        self.update()   # ← убрать ghost при отпускании
+
+    def leaveEvent(self, event):
+        """Курсор ушёл с виджета — убираем ghost preview."""
+        self._hover_idx = -1
+        self.update()
 
     def paintEvent(self, event):
         painter = QPainter(self)
@@ -258,6 +293,38 @@ class SimpleMapView(QWidget):
                         painter.setPen(cross_pen)
                         painter.drawLine(x1a, y1a, x2a, y2a)
                         painter.drawLine(x1b, y1b, x2b, y2b)
+
+            # ===== Ghost preview под курсором (как в Java) =====
+            mask = self.get_paint_mode() if self.get_paint_mode else 0
+            if mask != 0 and self._hover_idx >= 0 and not self._painting:
+                old = layout[self._hover_idx]
+                # Показываем только если флага ещё нет
+                if (old & mask) != mask:
+                    hx = self._hover_idx % 64
+                    hy = self._hover_idx // 64
+                    px = int(hx * s)
+                    py = int(hy * s)
+
+                    # 1) Жёлтая рамка вокруг ячейки
+                    frame_pen = QPen(QColor(255, 215, 0, 220))
+                    frame_pen.setWidth(max(2, int(2 * self.scale)))
+                    painter.setPen(frame_pen)
+                    painter.setBrush(Qt.NoBrush)
+                    painter.drawRect(px + 1, py + 1, int(s) - 2, int(s) - 2)
+
+                    # 2) Полупрозрачный крестик
+                    ghost_pen = QPen(QColor(230, 20, 20, 90))
+                    ghost_pen.setWidth(max(2, int(2 * self.scale)))
+                    ghost_pen.setCapStyle(Qt.FlatCap)
+                    painter.setPen(ghost_pen)
+                    painter.drawLine(
+                        px + margin, py + margin,
+                        px + int(s) - margin, py + int(s) - margin
+                    )
+                    painter.drawLine(
+                        px + int(s) - margin, py + margin,
+                        px + margin, py + int(s) - margin
+                    )
 
         # ===== Сетка =====
         if self.show_grid:
@@ -1150,9 +1217,14 @@ class MapEditorPanel(rompanel.ROMPanel):
             cb.setChecked(self._saved_exploration_state)
             cb.setEnabled(True)
 
-        # Курсор: крестик, если есть хоть один активный режим
+        # Курсор:
+        #   режим флагов → обычная стрелка (у нас ghost preview — он и есть «курсор»)
+        #   режим блоков + выбран блок → крестик
+        #   иначе → стрелка
         if self.current_view and self.current_view.editable:
-            if mask != 0 or self.paint_left >= 0 or self.paint_right >= 0:
+            if mask != 0:
+                self.current_view.setCursor(Qt.ArrowCursor)
+            elif self.paint_left >= 0 or self.paint_right >= 0:
                 self.current_view.setCursor(Qt.CrossCursor)
             else:
                 self.current_view.setCursor(Qt.ArrowCursor)
@@ -1173,6 +1245,10 @@ class MapEditorPanel(rompanel.ROMPanel):
         elif button == Qt.RightButton:
             return self.paint_right
         return -1
+
+    def _get_paint_mode(self):
+        """Возвращает текущую маску режима (0 = краска, иначе — флаг)."""
+        return self.paint_mode
 
     def _on_block_painted(self, idx: int, old_val: int, new_val: int):
         """Пользователь нарисовал блок — пушим в undo."""
@@ -1226,6 +1302,7 @@ class MapEditorPanel(rompanel.ROMPanel):
             scale=self._current_scale(),
             editable=True,
             get_paint_block=self._get_paint_block,
+            get_paint_mode=self._get_paint_mode,
         )
         view.show_grid = self.view_cbs["grid"].isChecked()
         view.show_exploration_flags = self.view_cbs["exploration"].isChecked()
