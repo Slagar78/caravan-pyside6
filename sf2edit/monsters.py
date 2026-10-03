@@ -148,7 +148,7 @@ class Monster:
     @move_type.setter
     def move_type(self, v): self._set(49, v)
 
-    # --- items (3 slots: +33, +35, +37) ---
+    # --- items (4 slots: +33, +35, +37, +39) ---
     def get_item(self, i):
         b = self.raw[33 + i * 2]
         eq = b >= 0x80
@@ -515,12 +515,12 @@ class MonsterPanel(rompanel.ROMPanel):
 
             # Inventory
             self.invList.clear()
-            for i in range(3):
+            for i in range(4):
                 idx, eq = m.get_item(i)
                 name = ITEM_NAMES[idx] if 0 <= idx < len(ITEM_NAMES) else "Empty"
                 label = f"{name} (Equipped)" if eq else name
                 self.invList.addItem(label)
-            self.invList.setFixedHeight(self.invList.sizeHintForRow(0) * 3
+            self.invList.setFixedHeight(self.invList.sizeHintForRow(0) * 4
                                         + 2 * self.invList.frameWidth() + 4)
 
             # Spells

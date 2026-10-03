@@ -12,6 +12,7 @@ from sf2edit import monsters
 from sf2edit import spells
 from sf2edit import items
 from sf2edit import shops
+from sf2edit import special
 
 panelList = {
     "Battles": battles.BattlePanel,
@@ -34,6 +35,7 @@ panelList = {
     "Spells":      spells.SpellPanel,
     "Items":       items.ItemPanel,
     "Shops":       shops.ShopPanel,
+    "Gameplay Values": special.SpecialPanel,
     "ROM Viewer": romviewer.ROMViewerPanel,
     "Sprites": sprites.SpritePanel,
     "Map Tiles": tiles.TilePanel,
