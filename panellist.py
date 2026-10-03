@@ -6,6 +6,7 @@ import backgrounds, battles, battle_floors, battle_sprites, spell_anims, dialogu
 import map_editor
 
 from sf2edit import characters
+from sf2edit import classes
 
 panelList = {
     "Battles": battles.BattlePanel,
@@ -21,7 +22,8 @@ panelList = {
     "Menu Icons": menu_icons.MenuIconPanel,
     "Palettes": palettes.PalettePanel,
     "Portraits": portraits.PortraitPanel,
-    "Characters": characters.CharacterPanel,      # ← (2) ДОБАВЛЕНО
+    "Characters": characters.CharacterPanel,
+    "Classes": classes.ClassPanel,
     "ROM Viewer": romviewer.ROMViewerPanel,
     "Sprites": sprites.SpritePanel,
     "Map Tiles": tiles.TilePanel,
