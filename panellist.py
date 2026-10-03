@@ -8,6 +8,7 @@ import map_editor
 from sf2edit import characters
 from sf2edit import classes
 from sf2edit import promotions
+from sf2edit import items
 
 panelList = {
     "Battles": battles.BattlePanel,
@@ -26,13 +27,14 @@ panelList = {
     "Characters": characters.CharacterPanel,
     "Classes": classes.ClassPanel,
     "Promotions":  promotions.PromotionsPanel,
+    "Items":       items.ItemPanel,
     "ROM Viewer": romviewer.ROMViewerPanel,
     "Sprites": sprites.SpritePanel,
     "Map Tiles": tiles.TilePanel,
     "Weapon Sprites": weapon_sprites.WeaponSpritePanel,
 }
 
-sf2editList = ["Classes", "Promotions", "Monsters", "Spells", "Items", "Shops"]   # ← (3) УБРАН "Characters"
+sf2editList = ["Monsters", "Spells", "Shops"]   # ← убрал "Items"
 
 def getPanelClass(name):
     if name in panelList:
