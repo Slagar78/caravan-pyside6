@@ -70,22 +70,48 @@ def _read_bin_section(rom, start_addr, end_addr):
 
 
 def _write_bin_sections(rom, py_map, map_dir):
-    """Пишет 0-blocks.bin и 1-layout.bin — точные копии из ROM."""
+    """Пишет 0-blocks.bin и 1-layout.bin.
+
+    Границы секции определяются как «до ближайшего следующего адреса
+    среди всех секций», потому что в расширенном ROM порядок секций
+    может отличаться от номинального (addrs[0..9]).
+    """
     addrs = py_map.sectionAddrs
 
-    # 0-blocks.bin
-    if addrs[0] is not None and addrs[1] is not None:
-        data = _read_bin_section(rom, addrs[0], addrs[1])
+    # Все валидные адреса, отсортированные по возрастанию
+    valid = sorted([a for a in addrs if a is not None])
+
+    def next_after(addr):
+        """Ближайший адрес из valid, который больше addr."""
+        for a in valid:
+            if a > addr:
+                return a
+        return None
+
+    def dump_section(index, filename):
+        if index >= len(addrs):
+            return
+        start = addrs[index]
+        if start is None:
+            return
+        end = next_after(start)
+        if end is None:
+            return
+        data = _read_bin_section(rom, start, end)
         if data:
-            with open(map_dir / "0-blocks.bin", "wb") as f:
+            with open(map_dir / filename, "wb") as f:
                 f.write(data)
+            print(f"[splitter] {filename}: "
+                  f"{hex(start)} → {hex(end)} ({len(data)} байт)")
+        else:
+            print(f"[splitter] {filename}: пусто "
+                  f"({hex(start)} → {hex(end)})")
+
+    # 0-blocks.bin
+    dump_section(0, "0-blocks.bin")
 
     # 1-layout.bin
-    if addrs[1] is not None and addrs[2] is not None:
-        data = _read_bin_section(rom, addrs[1], addrs[2])
-        if data:
-            with open(map_dir / "1-layout.bin", "wb") as f:
-                f.write(data)
+    dump_section(1, "1-layout.bin")
 
 
 # ============================================================
