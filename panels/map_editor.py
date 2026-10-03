@@ -11,7 +11,7 @@ from PySide6.QtWidgets import (
     QGridLayout, QSpinBox
 )
 from PySide6.QtCore import Qt, QTimer, QStandardPaths, Signal
-from PySide6.QtGui import QPainter, QPixmap, QImage, QColor
+from PySide6.QtGui import QPainter, QPixmap, QImage, QColor, QPen
 
 import rompanel
 import splitter
@@ -39,6 +39,7 @@ class SimpleMapView(QWidget):
         self.py_map = py_map
         self.palette = palette
         self.scale = scale
+        self.show_grid = False
         self.block_bmps = []
         self._rebuild()
         self._update_size()
@@ -97,6 +98,19 @@ class SimpleMapView(QWidget):
                             Qt.KeepAspectRatio, Qt.FastTransformation
                         )
                     painter.drawPixmap(int(x * s), int(y * s), bmp)
+
+        # ===== Сетка =====
+        if self.show_grid:
+            pen = QPen(QColor(255, 255, 255, 80))
+            pen.setWidth(1)
+            painter.setPen(pen)
+            step = int(self.BASE_BLOCK_SIZE * self.scale)
+            total = step * 64
+            for i in range(65):
+                pos = i * step
+                painter.drawLine(pos, 0, pos, total)
+                painter.drawLine(0, pos, total, pos)
+
         painter.end()
 
 
@@ -129,48 +143,85 @@ def fill_table(table: QTableWidget, rows: list[list]):
 #  Правая панель View (чекбоксы — заглушки)
 # ============================================================
 
-def build_view_panel() -> QWidget:
+def build_view_panel():
+    """Возвращает (widget, cbs) — словарь с чекбоксами."""
     w = QWidget()
     w.setMaximumWidth(220)
     layout = QVBoxLayout(w)
     layout.setContentsMargins(4, 4, 4, 4)
 
+    # Скруглённые чекбоксы
+    w.setStyleSheet("""
+        QCheckBox {
+            spacing: 6px;
+            padding: 2px 4px;
+        }
+        QCheckBox::indicator {
+            width: 14px;
+            height: 14px;
+            border: 1px solid #888;
+            border-radius: 4px;
+            background: #f5f5f5;
+        }
+        QCheckBox::indicator:hover {
+            border: 1px solid #3b82f6;
+            border-radius: 4px;
+        }
+        QCheckBox::indicator:checked {
+            background: #3b82f6;
+            border: 1px solid #2563eb;
+            border-radius: 4px;
+        }
+        QCheckBox::indicator:disabled {
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            background: #e8e8e8;
+        }
+        QCheckBox::indicator:checked:disabled {
+            background: #c7d9f0;
+            border: 1px solid #b0c4de;
+            border-radius: 4px;
+        }
+    """)
+
+    cbs = {}
+
     # --- Основные ---
     g1 = QGroupBox("View")
     l1 = QVBoxLayout(g1)
     l1.setSpacing(2)
-    l1.addWidget(QCheckBox("Show grid"))
-    l1.addWidget(QCheckBox("Show priority"))
-    l1.addWidget(QCheckBox("Exploration flags"))
-    ind1 = QCheckBox("   Areas")
-    ind2 = QCheckBox("   Warps")
-    ind3 = QCheckBox("   Triggers")
-    ind4 = QCheckBox("   Items")
-    ind5 = QCheckBox("   Vehicles")
-    for cb in (ind1, ind2, ind3, ind4, ind5):
-        l1.addWidget(cb)
-    l1.addWidget(QCheckBox("Flag Copies"))
-    l1.addWidget(QCheckBox("Step Copies"))
-    l1.addWidget(QCheckBox("Roof Copies"))
-    l1.addWidget(QCheckBox("Preview anim"))
+
+    cb = QCheckBox("Show grid");     cbs["grid"] = cb;     l1.addWidget(cb)
+    cb = QCheckBox("Show priority"); cbs["priority"] = cb; l1.addWidget(cb)
+    cb = QCheckBox("Exploration flags"); cbs["exploration"] = cb; l1.addWidget(cb)
+
+    for key, text in [("areas", "   Areas"), ("warps", "   Warps"),
+                      ("triggers", "   Triggers"), ("items", "   Items"),
+                      ("vehicles", "   Vehicles")]:
+        cb = QCheckBox(text); cbs[key] = cb; l1.addWidget(cb)
+
+    for key, text in [("flag_copies", "Flag Copies"),
+                      ("step_copies", "Step Copies"),
+                      ("roof_copies", "Roof Copies"),
+                      ("preview_anim", "Preview anim")]:
+        cb = QCheckBox(text); cbs[key] = cb; l1.addWidget(cb)
+
     layout.addWidget(g1)
 
     # --- Areas display ---
     g2 = QGroupBox("Areas display")
     l2 = QVBoxLayout(g2)
     l2.setSpacing(2)
-    l2.addWidget(QCheckBox("Upper layer overlay"))
-    l2.addWidget(QCheckBox("BG underlay"))
-    l2.addWidget(QCheckBox("Simulate parallax\nand autoscroll"))
-    layout.addWidget(g2)
 
+    for key, text in [("upper_overlay", "Upper layer overlay"),
+                      ("bg_underlay", "BG underlay"),
+                      ("parallax", "Simulate parallax\nand autoscroll")]:
+        cb = QCheckBox(text); cbs[key] = cb; l2.addWidget(cb)
+
+    layout.addWidget(g2)
     layout.addStretch()
 
-    # Все чекбоксы выключены (заглушки)
-    for cb in w.findChildren(QCheckBox):
-        cb.setEnabled(False)
-
-    return w
+    return w, cbs
 
 # ============================================================
 #  Панель Blockset (слева от карты)
@@ -647,7 +698,15 @@ class MapEditorPanel(rompanel.ROMPanel):
         self.blockset_panel.setMaximumWidth(340)
 
         # ============ Справа — View panel ============
-        right_panel = build_view_panel()
+        right_panel, self.view_cbs = build_view_panel()
+
+        # Все выключены по умолчанию
+        for cb in self.view_cbs.values():
+            cb.setEnabled(False)
+
+        # Активируем grid
+        self.view_cbs["grid"].setEnabled(True)
+        self.view_cbs["grid"].toggled.connect(self._on_grid_toggled)
 
         # ============ Главный сплиттер ============
         self._main_splitter = QSplitter(Qt.Horizontal)
@@ -752,6 +811,12 @@ class MapEditorPanel(rompanel.ROMPanel):
     #  Просмотр
     # ============================================================
 
+    def _on_grid_toggled(self, checked: bool):
+        """Включить/выключить сетку на карте."""
+        if self.current_view:
+            self.current_view.show_grid = checked
+            self.current_view.update()
+
     def _current_scale(self):
         text = self.scale_combo.currentText()
         return {"1/4x": 0.25, "1/2x": 0.5, "1x": 1, "2x": 2, "4x": 4}.get(text, 1)
@@ -777,6 +842,7 @@ class MapEditorPanel(rompanel.ROMPanel):
 
         palette = self.rom.data["palettes"][py_map.paletteIdx]
         view = SimpleMapView(py_map, palette, scale=self._current_scale())
+        view.show_grid = self.view_cbs["grid"].isChecked()
         self.current_view = view
         self.scroll_area.setWidget(view)
 
