@@ -12,7 +12,6 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt, QTimer, QStandardPaths, Signal
 from PySide6.QtGui import QPainter, QPixmap, QImage, QColor, QPen
-
 import rompanel
 import splitter
 import parsers
@@ -100,7 +99,7 @@ class SimpleMapView(QWidget):
 
     def paintEvent(self, event):
         painter = QPainter(self)
-        painter.fillRect(self.rect(), QColor(32, 32, 32))
+        painter.drawTiledPixmap(self.rect(), get_alpha_bg())
         if not self.block_bmps:
             painter.end()
             return
