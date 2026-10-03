@@ -338,8 +338,8 @@ def build_view_panel():
             background: #e8e8e8;
         }
         QCheckBox::indicator:checked:disabled {
-            background: #c7d9f0;
-            border: 1px solid #b0c4de;
+            background: #c060ff;
+            border: 1px solid #8f3dbf;
             border-radius: 4px;
         }
     """)
@@ -827,6 +827,7 @@ class MapEditorPanel(rompanel.ROMPanel):
         self.paint_left = -1       # индекс блока для ЛКМ (-1 = не выбран)
         self.paint_right = -1      # индекс блока для ПКМ (-1 = не выбран)
         self.paint_mode = 0        # 0 = Paint Blocks, иначе — маска флага
+        self._saved_exploration_state = False   # ← запоминаем состояние чекбокса
         self.undo_stack = []       # [(idx, old_val, new_val), ...]
         self.redo_stack = []
         self.current_view = None        
@@ -1129,9 +1130,26 @@ class MapEditorPanel(rompanel.ROMPanel):
                 self.current_view.setCursor(Qt.ArrowCursor)
 
     def _on_paint_mode_changed(self, mask: int):
-        """Сменился режим. Пока только запоминаем — само редактирование флагов позже."""
+        """Сменился режим. Как в Java:
+        
+        - вход в флаги: принудительно вкл Exploration flags и блокируем;
+        - выход в Paint Blocks: восстанавливаем состояние и разблокируем.
+        """
         self.paint_mode = mask
         print(f"[paint_mode] mask = 0x{mask:04X}")
+
+        cb = self.view_cbs["exploration"]
+
+        if mask != 0:
+            # Режим флагов — запоминаем текущее, включаем и блокируем
+            self._saved_exploration_state = cb.isChecked()
+            cb.setChecked(True)      # принудительно вкл
+            cb.setEnabled(False)     # заблокировать клик
+        else:
+            # Paint Blocks — восстанавливаем состояние, разблокируем
+            cb.setChecked(self._saved_exploration_state)
+            cb.setEnabled(True)
+
         # Курсор: крестик, если есть хоть один активный режим
         if self.current_view and self.current_view.editable:
             if mask != 0 or self.paint_left >= 0 or self.paint_right >= 0:
