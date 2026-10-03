@@ -91,6 +91,7 @@ class SimpleMapView(QWidget):
         self.palette = palette
         self.scale = scale
         self.show_grid = False
+        self.show_exploration_flags = False
         self.block_bmps = []
 
         # === Режим редактирования ===
@@ -213,6 +214,51 @@ class SimpleMapView(QWidget):
                         )
                     painter.drawPixmap(int(x * s), int(y * s), bmp)
 
+        # ===== Exploration flags (крестики на непроходимых) =====
+        if self.show_exploration_flags:
+            # Красная линия — 2px, толстая и заметная
+            line_w = max(2, int(2 * self.scale))
+            # Чёрная обводка — на 1px шире с каждой стороны
+            outline_w = line_w + max(1, int(1 * self.scale))
+            # Отступ от края — 20%, крестик ~60% ширины
+            margin = int(s * 0.20)
+
+            # Чёрная обводка — тонкая
+            outline_pen = QPen(QColor(0, 0, 0, 255))
+            outline_pen.setWidth(outline_w)
+            outline_pen.setCapStyle(Qt.FlatCap)
+
+            # Красная линия — поверх, яркая
+            cross_pen = QPen(QColor(230, 20, 20, 255))
+            cross_pen.setWidth(line_w)
+            cross_pen.setCapStyle(Qt.FlatCap)
+
+            painter.setBrush(Qt.NoBrush)
+
+            for y in range(64):
+                for x in range(64):
+                    idx = y * 64 + x
+                    if idx >= len(layout):
+                        continue
+                    if (layout[idx] & 0xC000) == 0xC000:
+                        px = int(x * s)
+                        py = int(y * s)
+                        # Координаты диагоналей
+                        x1a, y1a = px + margin, py + margin
+                        x2a, y2a = px + int(s) - margin, py + int(s) - margin
+                        x1b, y1b = px + int(s) - margin, py + margin
+                        x2b, y2b = px + margin, py + int(s) - margin
+
+                        # 1) Обводка (чёрная, толще)
+                        painter.setPen(outline_pen)
+                        painter.drawLine(x1a, y1a, x2a, y2a)
+                        painter.drawLine(x1b, y1b, x2b, y2b)
+
+                        # 2) Красная линия поверх — тоньше
+                        painter.setPen(cross_pen)
+                        painter.drawLine(x1a, y1a, x2a, y2a)
+                        painter.drawLine(x1b, y1b, x2b, y2b)
+
         # ===== Сетка =====
         if self.show_grid:
             pen = QPen(QColor(255, 255, 255, 80))
@@ -226,7 +272,6 @@ class SimpleMapView(QWidget):
                 painter.drawLine(0, pos, total, pos)
 
         painter.end()
-
 
 # ============================================================
 #  Универсальная таблица
@@ -934,6 +979,10 @@ class MapEditorPanel(rompanel.ROMPanel):
         self.view_cbs["grid"].setEnabled(True)
         self.view_cbs["grid"].toggled.connect(self._on_grid_toggled)
 
+        # Активируем Exploration flags
+        self.view_cbs["exploration"].setEnabled(True)
+        self.view_cbs["exploration"].toggled.connect(self._on_exploration_toggled)
+
         # ============ Главный сплиттер ============
         self._main_splitter = QSplitter(Qt.Horizontal)
         main_splitter = self._main_splitter
@@ -1046,6 +1095,12 @@ class MapEditorPanel(rompanel.ROMPanel):
             self.current_view.show_grid = checked
             self.current_view.update()
 
+    def _on_exploration_toggled(self, checked: bool):
+        """Включить/выключить крестики непроходимости на карте."""
+        if self.current_view:
+            self.current_view.show_exploration_flags = checked
+            self.current_view.update()
+
     def _current_scale(self):
         text = self.scale_combo.currentText()
         return {"1/4x": 0.25, "1/2x": 0.5, "1x": 1, "2x": 2, "4x": 4}.get(text, 1)
@@ -1155,6 +1210,7 @@ class MapEditorPanel(rompanel.ROMPanel):
             get_paint_block=self._get_paint_block,
         )
         view.show_grid = self.view_cbs["grid"].isChecked()
+        view.show_exploration_flags = self.view_cbs["exploration"].isChecked()
         view.blockPainted.connect(self._on_block_painted)
         self.current_view = view
         self.scroll_area.setWidget(view)
