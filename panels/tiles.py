@@ -177,10 +177,18 @@ class TilePanel(rompanel.ROMPanel):
 
     def OnShow(self):
         for p in range(16):
-            self.colorPanels[p].setStyleSheet(f"background-color: {self.palette.colors[p]};")
+            # 👇 Добавили скругление для палитры (3px)
+            self.colorPanels[p].setStyleSheet(
+                f"background-color: {self.palette.colors[p]}; border: none; border-radius: 3px;"
+            )
             self.colorPanels[p].update()
-        self.selectedColorLeft.setStyleSheet(f"background-color: {self.palette.colors[self.color_left]};")
-        self.selectedColorRight.setStyleSheet(f"background-color: {self.palette.colors[self.color_right]};")
+        # 👇 Добавили рамку и скругление для L/R (6px)
+        self.selectedColorLeft.setStyleSheet(
+            f"background-color: {self.palette.colors[self.color_left]}; border: 1px solid transparent; border-radius: 6px;"
+        )
+        self.selectedColorRight.setStyleSheet(
+            f"background-color: {self.palette.colors[self.color_right]}; border: 1px solid transparent; border-radius: 6px;"
+        )
 
     def OnImportImage(self):
         size = self.tilesetPanel.bmp.size()
@@ -240,7 +248,10 @@ class TilePanel(rompanel.ROMPanel):
     def changeColors(self):
         palette = self.palette
         for c in range(len(self.colorPanels)):
-            self.colorPanels[c].setStyleSheet(f"background-color: {palette.colors[c]};")
+            # 👇 Добавили скругление для палитры (3px)
+            self.colorPanels[c].setStyleSheet(
+                f"background-color: {palette.colors[c]}; border: none; border-radius: 3px;"
+            )
             self.colorPanels[c].update()
         self.editPanel.palette = palette
         self.editPanel.update()
@@ -253,11 +264,17 @@ class TilePanel(rompanel.ROMPanel):
         if button == 0:
             self.color_left = num
             self.selectedColorLeft.color = num
-            self.selectedColorLeft.setStyleSheet(f"background-color: {self.palette.colors[num]};")
+            # 👇 Добавили рамку и скругление для L (6px)
+            self.selectedColorLeft.setStyleSheet(
+                f"background-color: {self.palette.colors[num]}; border: 1px solid transparent; border-radius: 6px;"
+            )
         else:
             self.color_right = num
             self.selectedColorRight.color = num
-            self.selectedColorRight.setStyleSheet(f"background-color: {self.palette.colors[num]};")
+            # 👇 Добавили рамку и скругление для R (6px)
+            self.selectedColorRight.setStyleSheet(
+                f"background-color: {self.palette.colors[num]}; border: 1px solid transparent; border-radius: 6px;"
+            )
 
     def refreshPixels(self):
         for p in range(9):

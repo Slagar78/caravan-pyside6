@@ -88,6 +88,10 @@ class PalettePanel(rompanel.ROMPanel):
         text3 = QLabel("Clipboard")
         self.copyPanel = rompanel.ColorPanel(self, None, "#000000", enable=False)
         self.copyPanel.setFixedSize(60, 60)
+        # 👇 Добавляем скругление для Clipboard сразу при создании
+        self.copyPanel.setStyleSheet(
+            "background-color: #000000; border: 1px solid transparent; border-radius: 8px;"
+        )
         sbs3right.addWidget(text3, 0, Qt.AlignCenter)
         sbs3right.addWidget(self.copyPanel, 0, Qt.AlignCenter)
         
@@ -134,7 +138,10 @@ class PalettePanel(rompanel.ROMPanel):
     def changeColors(self):
         palette = self.curPalette
         for c, cp in enumerate(self.colorPanels):
-            cp.setStyleSheet(f"background-color: {palette.colors[c]};")
+            # 👇 Поменяли transparent на black, чтобы белые цвета не сливались с фоном
+            cp.setStyleSheet(
+                f"background-color: {palette.colors[c]}; border: 1px solid black; border-radius: 3px;"
+            )
             cp.update()
     
     def OnSelectPalette(self, idx):
@@ -156,7 +163,10 @@ class PalettePanel(rompanel.ROMPanel):
         self.color = num
         self.colorText.setText(f"Color {num:02d}")
         c = self.rom.data["palettes"][self.curPaletteIdx].colors[num]
-        self.editPanel.setStyleSheet(f"background-color: {c};")
+        # 👇 Добавили скругление 8px для большой панели Edit
+        self.editPanel.setStyleSheet(
+            f"background-color: {c}; border: 1px solid transparent; border-radius: 8px;"
+        )
         self.editPanel.update()
         self.setColor(c)
         
@@ -194,8 +204,13 @@ class PalettePanel(rompanel.ROMPanel):
         b = hex(self.spinBlue.value())[2:]
         c = f"#{r*2}{g*2}{b*2}"
         
-        self.editPanel.setStyleSheet(f"background-color: {c};")
-        self.colorPanels[self.color].setStyleSheet(f"background-color: {c};")
+        # 👇 Добавили скругление для Edit (8px) и для плашки (3px)
+        self.editPanel.setStyleSheet(
+            f"background-color: {c}; border: 1px solid transparent; border-radius: 8px;"
+        )
+        self.colorPanels[self.color].setStyleSheet(
+            f"background-color: {c}; border: 1px solid transparent; border-radius: 3px;"
+        )
         self.editPanel.update()
         self.colorPanels[self.color].update()
         
@@ -205,15 +220,23 @@ class PalettePanel(rompanel.ROMPanel):
         
     def OnCopyColor(self):
         c = self.rom.data["palettes"][self.curPaletteIdx].colors[self.color]
-        self.copyPanel.setStyleSheet(f"background-color: {c};")
+        # 👇 Добавили скругление 8px для панели Clipboard
+        self.copyPanel.setStyleSheet(
+            f"background-color: {c}; border: 1px solid transparent; border-radius: 8px;"
+        )
         self.copyPanel.update()
         self.copyPanel.copyColor = c
         self.pasteButton.setEnabled(True)
         
     def OnPasteColor(self):
         c = self.copyPanel.copyColor
-        self.editPanel.setStyleSheet(f"background-color: {c};")
-        self.colorPanels[self.color].setStyleSheet(f"background-color: {c};")
+        # 👇 Добавили скругление для Edit (8px) и для плашки (3px)
+        self.editPanel.setStyleSheet(
+            f"background-color: {c}; border: 1px solid transparent; border-radius: 8px;"
+        )
+        self.colorPanels[self.color].setStyleSheet(
+            f"background-color: {c}; border: 1px solid transparent; border-radius: 3px;"
+        )
         self.editPanel.update()
         self.colorPanels[self.color].update()
         self.updateSymbols()
