@@ -283,9 +283,15 @@ class SpritePanel(rompanel.ROMPanel):
     def OnShow(self, event=None):
         self.changeColors()
         if hasattr(self, 'selectedColorLeft') and shiboken6.isValid(self.selectedColorLeft):
-            self.selectedColorLeft.setStyleSheet(f"background-color: {self.palette.colors[self.color_left]};")
+            # 👇 Добавили border-radius: 6px;
+            self.selectedColorLeft.setStyleSheet(
+                f"background-color: {self.palette.colors[self.color_left]}; border-radius: 6px;"
+            )
         if hasattr(self, 'selectedColorRight') and shiboken6.isValid(self.selectedColorRight):
-            self.selectedColorRight.setStyleSheet(f"background-color: {self.palette.colors[self.color_right]};")
+            # 👇 Добавили border-radius: 6px;
+            self.selectedColorRight.setStyleSheet(
+                f"background-color: {self.palette.colors[self.color_right]}; border-radius: 6px;"
+            )
 
     def TimerTest(self):
         self.animFrame ^= 1
@@ -311,11 +317,17 @@ class SpritePanel(rompanel.ROMPanel):
         if button == 0:
             self.color_left = num
             self.selectedColorLeft.color = num
-            self.selectedColorLeft.setStyleSheet(f"background-color: {self.palette.colors[num]};")
+            # 👇 Добавили border-radius: 6px;
+            self.selectedColorLeft.setStyleSheet(
+                f"background-color: {self.palette.colors[num]}; border-radius: 6px;"
+            )
         else:
             self.color_right = num
             self.selectedColorRight.color = num
-            self.selectedColorRight.setStyleSheet(f"background-color: {self.palette.colors[num]};")
+            # 👇 Добавили border-radius: 6px;
+            self.selectedColorRight.setStyleSheet(
+                f"background-color: {self.palette.colors[num]}; border-radius: 6px;"
+            )
 
     def OnSelectFacing(self, btn):
         self.side = self.facingGroup.id(btn)

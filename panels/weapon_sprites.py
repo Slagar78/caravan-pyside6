@@ -292,7 +292,8 @@ class WeaponSpritePanel(rompanel.ROMPanel):
         for c in range(len(self.colorPanels)):
             cp = self.colorPanels[c]
             if shiboken6.isValid(cp):
-                cp.setStyleSheet(f"background-color: {palette.colors[c]};")
+                # 👇 Вот здесь добавили border-radius
+                cp.setStyleSheet(f"background-color: {palette.colors[c]}; border-radius: 3px;")
                 cp.update()
         # Обновляем панели кадров
         for fp in self.framePanels:

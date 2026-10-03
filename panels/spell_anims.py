@@ -202,7 +202,10 @@ class SpellAnimationPanel(rompanel.ROMPanel):
             if p < len(self.colorPanels):
                 cp = self.colorPanels[p]
                 if shiboken6.isValid(cp):
-                    cp.setStyleSheet(f"background-color: {self.palette.colors[p]};")
+                    # 👇 Добавили рамку и скругление
+                    cp.setStyleSheet(
+                        f"background-color: {self.palette.colors[p]}; border: 1px solid transparent; border-radius: 6px;"
+                    )
                     cp.update()
 
     def changeColors(self):
@@ -210,7 +213,10 @@ class SpellAnimationPanel(rompanel.ROMPanel):
         for c in range(len(self.colorPanels)):
             cp = self.colorPanels[c]
             if shiboken6.isValid(cp):
-                cp.setStyleSheet(f"background-color: {palette.colors[c]};")
+                # 👇 Добавили рамку и скругление
+                cp.setStyleSheet(
+                    f"background-color: {palette.colors[c]}; border: 1px solid transparent; border-radius: 6px;"
+                )
                 cp.update()
         if shiboken6.isValid(self.editPanel):
             self.editPanel.palette = palette

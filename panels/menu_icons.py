@@ -182,12 +182,18 @@ class MenuIconPanel(rompanel.ROMPanel):
             self.color_left = num
             if hasattr(self, 'selectedColorLeft') and shiboken6.isValid(self.selectedColorLeft):
                 self.selectedColorLeft.color = num
-                self.selectedColorLeft.setStyleSheet(f"background-color: {self.palette.colors[num]};")
+                # 👇 Добавили рамку и скругление
+                self.selectedColorLeft.setStyleSheet(
+                    f"background-color: {self.palette.colors[num]}; border: 1px solid transparent; border-radius: 6px;"
+                )
         else:
             self.color_right = num
             if hasattr(self, 'selectedColorRight') and shiboken6.isValid(self.selectedColorRight):
                 self.selectedColorRight.color = num
-                self.selectedColorRight.setStyleSheet(f"background-color: {self.palette.colors[num]};")
+                # 👇 Добавили рамку и скругление
+                self.selectedColorRight.setStyleSheet(
+                    f"background-color: {self.palette.colors[num]}; border: 1px solid transparent; border-radius: 6px;"
+                )
 
     def OnSelectIcon(self, idx):
         self.changeIcon(idx)
@@ -359,9 +365,15 @@ class MenuIconPanel(rompanel.ROMPanel):
     def OnShow(self, event=None):
         self.changeColors()
         if hasattr(self, 'selectedColorLeft') and shiboken6.isValid(self.selectedColorLeft):
-            self.selectedColorLeft.setStyleSheet(f"background-color: {self.palette.colors[self.color_left]};")
+            # 👇 Добавили рамку и скругление
+            self.selectedColorLeft.setStyleSheet(
+                f"background-color: {self.palette.colors[self.color_left]}; border: 1px solid transparent; border-radius: 6px;"
+            )
         if hasattr(self, 'selectedColorRight') and shiboken6.isValid(self.selectedColorRight):
-            self.selectedColorRight.setStyleSheet(f"background-color: {self.palette.colors[self.color_right]};")
+            # 👇 Добавили рамку и скругление
+            self.selectedColorRight.setStyleSheet(
+                f"background-color: {self.palette.colors[self.color_right]}; border: 1px solid transparent; border-radius: 6px;"
+            )
 
     def getCurrentSpriteObject(self):
         return self.icon
