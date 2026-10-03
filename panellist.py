@@ -7,6 +7,7 @@ import map_editor
 
 from sf2edit import characters
 from sf2edit import classes
+from sf2edit import promotions
 
 panelList = {
     "Battles": battles.BattlePanel,
@@ -24,6 +25,7 @@ panelList = {
     "Portraits": portraits.PortraitPanel,
     "Characters": characters.CharacterPanel,
     "Classes": classes.ClassPanel,
+    "Promotions":  promotions.PromotionsPanel,
     "ROM Viewer": romviewer.ROMViewerPanel,
     "Sprites": sprites.SpritePanel,
     "Map Tiles": tiles.TilePanel,
