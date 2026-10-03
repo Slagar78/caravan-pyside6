@@ -17,6 +17,28 @@ import rompanel
 import splitter
 import parsers
 
+# ============================================================
+#  Шахматка (alpha.png)
+# ============================================================
+
+_ALPHA_BG = None
+
+def get_alpha_bg():
+    """Возвращает QPixmap alpha.png (загружается один раз)."""
+    global _ALPHA_BG
+    if _ALPHA_BG is None:
+        _ALPHA_BG = QPixmap("alpha.png")
+    return _ALPHA_BG
+
+
+def make_alpha_block(bmp: QPixmap, size: int) -> QPixmap:
+    """Накладывает блок поверх шахматки alpha.png."""
+    bg = get_alpha_bg().scaled(size, size)
+    p = QPainter(bg)
+    p.drawPixmap(0, 0, bmp)
+    p.end()
+    return bg
+
 
 def get_cache_dir(rom_path=None):
     base = QStandardPaths.writableLocation(
@@ -420,7 +442,7 @@ class BlocksetPanel(QWidget):
                         for t in rt[idx]:
                             buf += bytes([t])
                 img = QImage(buf, 24, 24, QImage.Format_RGBA8888)
-                self.block_bmps.append(QPixmap.fromImage(img))
+                self.block_bmps.append(QPixmap.fromImage(img))   # ← без alpha
             except Exception as e:
                 print(f"[blockset] Ошибка блока: {e}")
                 self.block_bmps.append(QPixmap(24, 24))
@@ -468,9 +490,9 @@ class BlocksetPanel(QWidget):
                 lbl.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
                 self.grid.addWidget(lbl, row, 0)
 
-            # Миниатюра блока (с сигналом клика)
+            # Миниатюра блока (alpha под низом — при показе)
             cell = ClickLabel(i)
-            cell.setPixmap(bmp)
+            cell.setPixmap(make_alpha_block(bmp, self.BLOCK_SIZE))
             cell.setFixedSize(self.BLOCK_SIZE, self.BLOCK_SIZE)
             cell.setToolTip(f"Block {i}")
             cell.clicked.connect(self._on_block_clicked)
@@ -492,7 +514,7 @@ class BlocksetPanel(QWidget):
         big = self.block_bmps[index].scaled(
             56, 56, Qt.KeepAspectRatio, Qt.FastTransformation
         )
-        self.left_preview.setPixmap(big)
+        self.left_preview.setPixmap(make_alpha_block(big, 56))
         self.left_index_label.setText(f"Block {index}")
 
         self._refresh_cell_highlight()
@@ -506,7 +528,7 @@ class BlocksetPanel(QWidget):
         big = self.block_bmps[index].scaled(
             56, 56, Qt.KeepAspectRatio, Qt.FastTransformation
         )
-        self.right_preview.setPixmap(big)
+        self.right_preview.setPixmap(make_alpha_block(big, 56))
         self.right_index_label.setText(f"Block {index}")
 
         self._refresh_cell_highlight()
