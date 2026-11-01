@@ -27,3 +27,5 @@ caravan.cfg
 # Сохранения и экспорт
 *.sav
 *.gif
+
+*.cfg
